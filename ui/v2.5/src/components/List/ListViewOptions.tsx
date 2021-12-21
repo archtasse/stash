@@ -138,7 +138,7 @@ export const ListViewOptions: React.FC<IListViewOptionsProps> = ({
 
   function maybeRenderZoom() {
     let zoomable = false;
-    switch (displayMode){
+    switch (displayMode) {
       case DisplayMode.Grid:
         zoomable = true;
         break;

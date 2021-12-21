@@ -262,18 +262,7 @@ export const ImageList: React.FC<IImageList> = ({
     selectedIds: Set<string>,
     zoomIndex: number
   ) {
-    return (
-      <ImageRater
-        key={image.id}
-        image={image}
-        zoomIndex={zoomIndex}
-        selecting={selectedIds.size > 0}
-        selected={selectedIds.has(image.id)}
-        onSelectedChanged={(selected: boolean, shiftKey: boolean) =>
-          onSelectChange(image.id, selected, shiftKey)
-        }
-      />
-    );
+    return <ImageRater key={image.id} image={image} zoomIndex={zoomIndex} />;
   }
 
   function renderImages(

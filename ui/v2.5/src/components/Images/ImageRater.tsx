@@ -7,9 +7,8 @@ import { Icon, TagLink, HoverPopover, SweatDrops } from "src/components/Shared";
 import { TextUtils } from "src/utils";
 import { PerformerPopoverButton } from "../Shared/PerformerPopoverButton";
 import { GridCard } from "../Shared/GridCard";
-import { RatingBanner } from "../Shared/RatingBanner";
-import {RatingStars} from "../Scenes/SceneDetails/RatingStars";
-import {useImageUpdate} from "../../core/StashService";
+import { RatingStars } from "../Scenes/SceneDetails/RatingStars";
+import { useImageUpdate } from "../../core/StashService";
 import { useToast } from "src/hooks";
 
 interface IImageRaterProps {
@@ -108,15 +107,15 @@ export const ImageRater: React.FC<IImageRaterProps> = (
 
   async function onSave(input: GQL.ImageUpdateInput) {
     setIsUpdating(true);
-      try {
-        const result = await updateImage({
-          variables: {
-            input,
-          },
-        });
-      } catch (e) {
-        Toast.error(e);
-      }
+    try {
+      await updateImage({
+        variables: {
+          input,
+        },
+      });
+    } catch (e) {
+      Toast.error(e);
+    }
     setIsUpdating(false);
   }
 
@@ -127,7 +126,7 @@ export const ImageRater: React.FC<IImageRaterProps> = (
     };
   }
 
-// Removed Rating Banner           <RatingBanner rating={props.image.rating} />
+  // Removed Rating Banner           <RatingBanner rating={props.image.rating} />
   return (
     <GridCard
       className={`image-card zoom-${props.zoomIndex}`}
