@@ -20,6 +20,7 @@ import {
 } from "src/hooks/ListHook";
 
 import { ImageCard } from "./ImageCard";
+import { ImageRater } from "./ImageRater";
 import { EditImagesDialog } from "./EditImagesDialog";
 import { DeleteImagesDialog } from "./DeleteImagesDialog";
 import "flexbin/flexbin.css";
@@ -256,6 +257,25 @@ export const ImageList: React.FC<IImageList> = ({
     );
   }
 
+  function renderImageRater(
+    image: SlimImageDataFragment,
+    selectedIds: Set<string>,
+    zoomIndex: number
+  ) {
+    return (
+      <ImageRater
+        key={image.id}
+        image={image}
+        zoomIndex={zoomIndex}
+        selecting={selectedIds.size > 0}
+        selected={selectedIds.has(image.id)}
+        onSelectedChanged={(selected: boolean, shiftKey: boolean) =>
+          onSelectChange(image.id, selected, shiftKey)
+        }
+      />
+    );
+  }
+
   function renderImages(
     result: FindImagesQueryResult,
     filter: ListFilterModel,
@@ -283,6 +303,15 @@ export const ImageList: React.FC<IImageList> = ({
           currentPage={filter.currentPage}
           pageCount={pageCount}
         />
+      );
+    }
+    if (filter.displayMode === DisplayMode.Rater) {
+      return (
+        <div className="row justify-content-center">
+          {result.data.findImages.images.map((image) =>
+            renderImageRater(image, selectedIds, filter.zoomIndex)
+          )}
+        </div>
       );
     }
   }

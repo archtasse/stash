@@ -78,6 +78,8 @@ export const ListViewOptions: React.FC<IListViewOptionsProps> = ({
           return "square";
         case DisplayMode.Tagger:
           return "tags";
+        case DisplayMode.Rater:
+          return "star-half-alt";
       }
     }
     function getLabel(option: DisplayMode) {
@@ -94,6 +96,9 @@ export const ListViewOptions: React.FC<IListViewOptionsProps> = ({
           break;
         case DisplayMode.Tagger:
           displayModeId = "tagger";
+          break;
+        case DisplayMode.Rater:
+          displayModeId = "rater";
           break;
       }
       return intl.formatMessage({ id: `display_mode.${displayModeId}` });
@@ -132,7 +137,16 @@ export const ListViewOptions: React.FC<IListViewOptionsProps> = ({
   }
 
   function maybeRenderZoom() {
-    if (onSetZoom && displayMode === DisplayMode.Grid) {
+    let zoomable = false;
+    switch (displayMode){
+      case DisplayMode.Grid:
+        zoomable = true;
+        break;
+      case DisplayMode.Rater:
+        zoomable = true;
+        break;
+    }
+    if (onSetZoom && zoomable) {
       return (
         <div className="align-middle">
           <Form.Control
