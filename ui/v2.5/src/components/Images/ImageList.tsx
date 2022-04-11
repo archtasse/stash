@@ -159,6 +159,14 @@ const ImageListImages: React.FC<IImageListImages> = ({
     );
   }
 
+  function renderImageRater(
+    image: SlimImageDataFragment,
+    selectedIds: Set<string>,
+    zoomIndex: number
+  ) {
+    return <ImageRater key={image.id} image={image} zoomIndex={zoomIndex} />;
+  }
+
   if (filter.displayMode === DisplayMode.Grid) {
     return (
       <div className="row justify-content-center">
@@ -177,6 +185,15 @@ const ImageListImages: React.FC<IImageListImages> = ({
         pageCount={pageCount}
         handleImageOpen={handleImageOpen}
       />
+    );
+  }
+  if (filter.displayMode === DisplayMode.Rater) {
+    return (
+      <div className="row justify-content-center">
+        {images.map((image) =>
+          renderImageRater(image, selectedIds, filter.zoomIndex)
+        )}
+      </div>
     );
   }
 
@@ -320,14 +337,6 @@ export const ImageList: React.FC<IImageList> = ({
 
   function selectChange(id: string, selected: boolean, shiftKey: boolean) {
     onSelectChange(id, selected, shiftKey);
-  }
-
-  function renderImageRater(
-    image: SlimImageDataFragment,
-    selectedIds: Set<string>,
-    zoomIndex: number
-  ) {
-    return <ImageRater key={image.id} image={image} zoomIndex={zoomIndex} />;
   }
 
   function renderImages(
