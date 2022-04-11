@@ -66,6 +66,8 @@ interface IImageListImages {
   onChangePage: (page: number) => void;
   pageCount: number;
   onSelectChange: (id: string, selected: boolean, shiftKey: boolean) => void;
+  slideshowRunning: boolean;
+  setSlideshowRunning: (running: boolean) => void;
 }
 
 const ImageListImages: React.FC<IImageListImages> = ({
@@ -75,8 +77,9 @@ const ImageListImages: React.FC<IImageListImages> = ({
   onChangePage,
   pageCount,
   onSelectChange,
+  slideshowRunning,
+  setSlideshowRunning,
 }) => {
-  const [slideshowRunning, setSlideshowRunning] = useState<boolean>(false);
   const handleLightBoxPage = useCallback(
     (direction: number) => {
       if (direction === -1) {
@@ -126,7 +129,7 @@ const ImageListImages: React.FC<IImageListImages> = ({
       setSlideshowRunning(true);
       showLightbox(index, true);
     },
-    [showLightbox]
+    [showLightbox, setSlideshowRunning]
   );
 
   function onPreview(index: number, ev: MouseEvent) {
@@ -198,6 +201,7 @@ export const ImageList: React.FC<IImageList> = ({
   const history = useHistory();
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isExportAll, setIsExportAll] = useState(false);
+  const [slideshowRunning, setSlideshowRunning] = useState<boolean>(false);
 
   const otherOperations = (extraOperations ?? []).concat([
     {
@@ -345,6 +349,8 @@ export const ImageList: React.FC<IImageList> = ({
         onSelectChange={selectChange}
         pageCount={pageCount}
         selectedIds={selectedIds}
+        slideshowRunning={slideshowRunning}
+        setSlideshowRunning={setSlideshowRunning}
       />
     );
   }
