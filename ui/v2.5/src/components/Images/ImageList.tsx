@@ -66,6 +66,8 @@ interface IImageListImages {
   onChangePage: (page: number) => void;
   pageCount: number;
   onSelectChange: (id: string, selected: boolean, shiftKey: boolean) => void;
+  slideshowRunning: boolean;
+  setSlideshowRunning: (running: boolean) => void;
 }
 
 const ImageListImages: React.FC<IImageListImages> = ({
@@ -75,8 +77,9 @@ const ImageListImages: React.FC<IImageListImages> = ({
   onChangePage,
   pageCount,
   onSelectChange,
+  slideshowRunning,
+  setSlideshowRunning,
 }) => {
-  const [slideshowRunning, setSlideshowRunning] = useState<boolean>(false);
   const handleLightBoxPage = useCallback(
     (direction: number) => {
       if (direction === -1) {
@@ -126,7 +129,7 @@ const ImageListImages: React.FC<IImageListImages> = ({
       setSlideshowRunning(true);
       showLightbox(index, true);
     },
-    [showLightbox]
+    [showLightbox, setSlideshowRunning]
   );
 
   function onPreview(index: number, ev: MouseEvent) {
@@ -156,6 +159,14 @@ const ImageListImages: React.FC<IImageListImages> = ({
     );
   }
 
+  function renderImageRater(
+    image: SlimImageDataFragment,
+    selectedIds: Set<string>,
+    zoomIndex: number
+  ) {
+    return <ImageRater key={image.id} image={image} zoomIndex={zoomIndex} />;
+  }
+
   if (filter.displayMode === DisplayMode.Grid) {
     return (
       <div className="row justify-content-center">
@@ -174,6 +185,15 @@ const ImageListImages: React.FC<IImageListImages> = ({
         pageCount={pageCount}
         handleImageOpen={handleImageOpen}
       />
+    );
+  }
+  if (filter.displayMode === DisplayMode.Rater) {
+    return (
+      <div className="row justify-content-center">
+        {images.map((image) =>
+          renderImageRater(image, selectedIds, filter.zoomIndex)
+        )}
+      </div>
     );
   }
 
@@ -198,6 +218,7 @@ export const ImageList: React.FC<IImageList> = ({
   const history = useHistory();
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isExportAll, setIsExportAll] = useState(false);
+  const [slideshowRunning, setSlideshowRunning] = useState<boolean>(false);
 
   const otherOperations = (extraOperations ?? []).concat([
     {
@@ -318,14 +339,6 @@ export const ImageList: React.FC<IImageList> = ({
     onSelectChange(id, selected, shiftKey);
   }
 
-  function renderImageRater(
-    image: SlimImageDataFragment,
-    selectedIds: Set<string>,
-    zoomIndex: number
-  ) {
-    return <ImageRater key={image.id} image={image} zoomIndex={zoomIndex} />;
-  }
-
   function renderImages(
     result: FindImagesQueryResult,
     filter: ListFilterModel,
@@ -345,6 +358,8 @@ export const ImageList: React.FC<IImageList> = ({
         onSelectChange={selectChange}
         pageCount={pageCount}
         selectedIds={selectedIds}
+        slideshowRunning={slideshowRunning}
+        setSlideshowRunning={setSlideshowRunning}
       />
     );
   }
