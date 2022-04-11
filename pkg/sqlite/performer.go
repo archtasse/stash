@@ -183,9 +183,6 @@ func (qb *performerQueryBuilder) QueryForAutoTag(words []string) ([]*models.Perf
 	var whereClauses []string
 	var args []interface{}
 
-	whereClauses = append(whereClauses, "name regexp ?")
-	args = append(args, "^[\\w][.\\-_ ]")
-
 	for _, w := range words {
 		whereClauses = append(whereClauses, "name like ?")
 		args = append(args, w+"%")
@@ -194,7 +191,11 @@ func (qb *performerQueryBuilder) QueryForAutoTag(words []string) ([]*models.Perf
 		// args = append(args, w+"%")
 	}
 
-	where := strings.Join(whereClauses, " OR ")
+	whereOr := "(" + strings.Join(whereClauses, " OR ") + ")"
+	where := strings.Join([]string{
+		"ignore_auto_tag = 0",
+		whereOr,
+	}, " AND ")
 	return qb.queryPerformers(query+" WHERE "+where, args)
 }
 
@@ -247,6 +248,7 @@ func (qb *performerQueryBuilder) makeFilter(filter *models.PerformerFilterType) 
 	query.handleCriterion(stringCriterionHandler(filter.Details, tableName+".details"))
 
 	query.handleCriterion(boolCriterionHandler(filter.FilterFavorites, tableName+".favorite"))
+	query.handleCriterion(boolCriterionHandler(filter.IgnoreAutoTag, tableName+".ignore_auto_tag"))
 
 	query.handleCriterion(yearFilterCriterionHandler(filter.BirthYear, tableName+".birthdate"))
 	query.handleCriterion(yearFilterCriterionHandler(filter.DeathYear, tableName+".death_date"))

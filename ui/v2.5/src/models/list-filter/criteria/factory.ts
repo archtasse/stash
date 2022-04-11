@@ -8,9 +8,11 @@ import {
   MandatoryNumberCriterionOption,
   StringCriterionOption,
   ILabeledIdCriterion,
+  BooleanCriterion,
+  BooleanCriterionOption,
 } from "./criterion";
 import { OrganizedCriterion } from "./organized";
-import { FavoriteCriterion } from "./favorite";
+import { FavoriteCriterion, PerformerFavoriteCriterion } from "./favorite";
 import { HasMarkersCriterion } from "./has-markers";
 import {
   PerformerIsMissingCriterionOption,
@@ -40,7 +42,7 @@ import { GalleriesCriterion } from "./galleries";
 import { CriterionType } from "../types";
 import { InteractiveCriterion } from "./interactive";
 import { RatingCriterionOption } from "./rating";
-import { PhashCriterionOption } from "./phash";
+import { DuplicatedCriterion, PhashCriterionOption } from "./phash";
 
 export function makeCriteria(type: CriterionType = "none") {
   switch (type) {
@@ -67,6 +69,7 @@ export function makeCriteria(type: CriterionType = "none") {
     case "image_count":
     case "gallery_count":
     case "performer_count":
+    case "performer_age":
     case "tag_count":
       return new NumberCriterion(
         new MandatoryNumberCriterionOption(type, type)
@@ -107,6 +110,8 @@ export function makeCriteria(type: CriterionType = "none") {
       return new TagsCriterion(ChildTagsCriterionOption);
     case "performers":
       return new PerformersCriterion();
+    case "performer_favorite":
+      return new PerformerFavoriteCriterion();
     case "studios":
       return new StudiosCriterion();
     case "parent_studios":
@@ -132,6 +137,8 @@ export function makeCriteria(type: CriterionType = "none") {
       );
     case "phash":
       return new StringCriterion(PhashCriterionOption);
+    case "duplicated":
+      return new DuplicatedCriterion();
     case "ethnicity":
     case "country":
     case "hair_color":
@@ -168,5 +175,7 @@ export function makeCriteria(type: CriterionType = "none") {
           "child_count"
         )
       );
+    case "ignore_auto_tag":
+      return new BooleanCriterion(new BooleanCriterionOption(type, type));
   }
 }

@@ -29,6 +29,11 @@ export interface INumberValue {
   value2: number | undefined;
 }
 
+export interface IPHashDuplicationValue {
+  duplicated: boolean;
+  distance?: number; // currently not implemented
+}
+
 export function criterionIsHierarchicalLabelValue(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   value: any
@@ -120,4 +125,8 @@ export type CriterionType =
   | "director"
   | "synopsis"
   | "parent_tag_count"
-  | "child_tag_count";
+  | "child_tag_count"
+  | "performer_favorite"
+  | "performer_age"
+  | "duplicated"
+  | "ignore_auto_tag";

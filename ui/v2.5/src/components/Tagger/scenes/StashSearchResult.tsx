@@ -23,6 +23,7 @@ import { OptionalField } from "../IncludeButton";
 import { SceneTaggerModalsState } from "./sceneTaggerModals";
 import PerformerResult from "./PerformerResult";
 import StudioResult from "./StudioResult";
+import { useInitialState } from "src/hooks/state";
 
 const getDurationStatus = (
   scene: IScrapedScene,
@@ -214,7 +215,9 @@ const StashSearchResult: React.FC<IStashSearchResultProps> = ({
   const [excludedFields, setExcludedFields] = useState<Record<string, boolean>>(
     {}
   );
-  const [tagIDs, setTagIDs] = useState<string[]>(getInitialTags());
+  const [tagIDs, setTagIDs, setInitialTagIDs] = useInitialState<string[]>(
+    getInitialTags()
+  );
 
   // map of original performer to id
   const [performerIDs, setPerformerIDs] = useState<(string | undefined)[]>(
@@ -226,8 +229,8 @@ const StashSearchResult: React.FC<IStashSearchResultProps> = ({
   );
 
   useEffect(() => {
-    setTagIDs(getInitialTags());
-  }, [getInitialTags]);
+    setInitialTagIDs(getInitialTags());
+  }, [getInitialTags, setInitialTagIDs]);
 
   useEffect(() => {
     setPerformerIDs(getInitialPerformers());
@@ -272,7 +275,10 @@ const StashSearchResult: React.FC<IStashSearchResultProps> = ({
     );
 
     function resolveField<T>(field: string, stashField: T, remoteField: T) {
-      if (excludedFieldList.includes(field)) {
+      // #2452 - don't overwrite fields that are already set if the remote field is empty
+      const remoteFieldIsNull =
+        remoteField === null || remoteField === undefined;
+      if (excludedFieldList.includes(field) || remoteFieldIsNull) {
         return stashField;
       }
 
@@ -304,10 +310,9 @@ const StashSearchResult: React.FC<IStashSearchResultProps> = ({
       title: resolveField("title", stashScene.title, scene.title),
       details: resolveField("details", stashScene.details, scene.details),
       date: resolveField("date", stashScene.date, scene.date),
-      performer_ids:
-        filteredPerformerIDs.length === 0
-          ? stashScene.performers.map((p) => p.id)
-          : filteredPerformerIDs,
+      performer_ids: uniq(
+        stashScene.performers.map((p) => p.id).concat(filteredPerformerIDs)
+      ),
       studio_id: studioID,
       cover_image: resolveField("cover_image", undefined, imgData),
       url: resolveField("url", stashScene.url, scene.url),
@@ -336,6 +341,9 @@ const StashSearchResult: React.FC<IStashSearchResultProps> = ({
           stash_id: scene.remote_site_id,
         },
       ];
+    } else {
+      // #2348 - don't include stash_ids if we're not setting them
+      delete sceneCreateInput.stash_ids;
     }
 
     await saveScene(sceneCreateInput, includeStashID);
@@ -566,6 +574,13 @@ const StashSearchResult: React.FC<IStashSearchResultProps> = ({
     </div>
   );
 
+  async function onCreateTag(t: GQL.ScrapedTag) {
+    const newTagID = await createNewTag(t);
+    if (newTagID !== undefined) {
+      setTagIDs([...tagIDs, newTagID]);
+    }
+  }
+
   const renderTagsField = () => (
     <div className="mt-2">
       <div>
@@ -592,7 +607,7 @@ const StashSearchResult: React.FC<IStashSearchResultProps> = ({
             variant="secondary"
             key={t.name}
             onClick={() => {
-              createNewTag(t);
+              onCreateTag(t);
             }}
           >
             {t.name}
