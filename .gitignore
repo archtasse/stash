@@ -61,3 +61,4 @@ dist
 
 /_docker*/
 /_gitlab_token
+/docker-compose.yml
