@@ -1,33 +1,28 @@
 // This is a modified version of ImageCard which has additional tagging utilities on the bottom.
-import React, { MouseEvent, useMemo } from "react";
+import React from "react";
 import { Button, ButtonGroup } from "react-bootstrap";
 import cx from "classnames";
 import * as GQL from "src/core/generated-graphql";
 import { Icon, TagLink, HoverPopover, SweatDrops } from "src/components/Shared";
+import { TextUtils } from "src/utils";
 import { PerformerPopoverButton } from "../Shared/PerformerPopoverButton";
 import { GridCard } from "../Shared/GridCard";
-import { RatingStars } from "../Scenes/SceneDetails/RatingStars";
-import { useImageUpdate } from "../../core/StashService";
+import { RatingBanner } from "../Shared/RatingBanner";
+import {RatingStars} from "../Scenes/SceneDetails/RatingStars";
+import {useImageUpdate} from "../../core/StashService";
 import { useToast } from "src/hooks";
-import { faBox, faSearch, faTag } from "@fortawesome/free-solid-svg-icons";
-import { objectTitle } from "src/core/files";
 
 interface IImageRaterProps {
   image: GQL.SlimImageDataFragment;
   selecting?: boolean;
-  selected?: boolean | undefined;
+  selected: boolean | undefined;
   zoomIndex: number;
-  onSelectedChanged?: (selected: boolean, shiftKey: boolean) => void;
-  onPreview?: (ev: MouseEvent) => void;
+  onSelectedChanged: (selected: boolean, shiftKey: boolean) => void;
 }
 
 export const ImageRater: React.FC<IImageRaterProps> = (
   props: IImageRaterProps
 ) => {
-  const file = useMemo(
-    () => (props.image.files.length > 0 ? props.image.files[0] : undefined),
-    [props.image]
-  );
   const [updateImage] = useImageUpdate();
   const Toast = useToast();
   const [isUpdating, setIsUpdating] = React.useState(false);
@@ -46,7 +41,7 @@ export const ImageRater: React.FC<IImageRaterProps> = (
         content={popoverContent}
       >
         <Button className="minimal">
-          <Icon icon={faTag} />
+          <Icon icon="tag" />
           <span>{props.image.tags.length}</span>
         </Button>
       </HoverPopover>
@@ -62,7 +57,7 @@ export const ImageRater: React.FC<IImageRaterProps> = (
   function maybeRenderOCounter() {
     if (props.image.o_counter) {
       return (
-        <div className="o-count">
+        <div>
           <Button className="minimal">
             <span className="fa-icon">
               <SweatDrops />
@@ -77,9 +72,9 @@ export const ImageRater: React.FC<IImageRaterProps> = (
   function maybeRenderOrganized() {
     if (props.image.organized) {
       return (
-        <div className="organized">
+        <div>
           <Button className="minimal">
-            <Icon icon={faBox} />
+            <Icon icon="box" />
           </Button>
         </div>
       );
@@ -108,22 +103,23 @@ export const ImageRater: React.FC<IImageRaterProps> = (
   }
 
   function isPortrait() {
-    const width = file?.width ? file.width : 0;
-    const height = file?.height ? file.height : 0;
+    const { file } = props.image;
+    const width = file.width ? file.width : 0;
+    const height = file.height ? file.height : 0;
     return height > width;
   }
 
   async function onSave(input: GQL.ImageUpdateInput) {
     setIsUpdating(true);
-    try {
-      await updateImage({
-        variables: {
-          input,
-        },
-      });
-    } catch (e) {
-      Toast.error(e);
-    }
+      try {
+        const result = await updateImage({
+          variables: {
+            input,
+          },
+        });
+      } catch (e) {
+        Toast.error(e);
+      }
     setIsUpdating(false);
   }
 
@@ -134,12 +130,16 @@ export const ImageRater: React.FC<IImageRaterProps> = (
     };
   }
 
-  // Removed Rating Banner           <RatingBanner rating={props.image.rating} />
+// Removed Rating Banner           <RatingBanner rating={props.image.rating} />
   return (
     <GridCard
       className={`image-card zoom-${props.zoomIndex}`}
       url={`/images/${props.image.id}`}
-      title={objectTitle(props.image)}
+      title={
+        props.image.title
+          ? props.image.title
+          : TextUtils.fileNameFromPath(props.image.path)
+      }
       linkClassName="image-card-link"
       image={
         <>
@@ -149,27 +149,21 @@ export const ImageRater: React.FC<IImageRaterProps> = (
               alt={props.image.title ?? ""}
               src={props.image.paths.thumbnail ?? ""}
             />
-            {props.onPreview ? (
-              <div className="preview-button">
-                <Button onClick={props.onPreview}>
-                  <Icon icon={faSearch} />
-                </Button>
-              </div>
-            ) : undefined}
           </div>
         </>
       }
       popovers={maybeRenderPopoverButtonGroup()}
+      selected={props.selected}
+      selecting={props.selecting}
+      onSelectedChanged={props.onSelectedChanged}
       details={
-        <div className={cx("image-card-rater-stars")}>
-          <RatingStars
-            value={props.image.rating ?? undefined}
-            onSetRating={(value) => {
-              onSave(getImageInput(value));
-            }}
-            disabled={isUpdating}
-          />
-        </div>
+        <RatingStars
+          value={props.image.rating ?? undefined}
+          onSetRating={(value) => {
+            onSave(getImageInput(value));
+          }}
+          disabled={isUpdating}
+        />
       }
     />
   );

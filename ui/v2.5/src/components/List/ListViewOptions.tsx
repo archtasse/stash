@@ -10,13 +10,6 @@ import {
 import { DisplayMode } from "src/models/list-filter/types";
 import { useIntl } from "react-intl";
 import { Icon } from "../Shared";
-import {
-  faList,
-  faSquare,
-  faTags,
-  faThLarge,
-  faStarHalfAlt,
-} from "@fortawesome/free-solid-svg-icons";
 
 interface IListViewOptionsProps {
   zoomIndex?: number;
@@ -78,15 +71,15 @@ export const ListViewOptions: React.FC<IListViewOptionsProps> = ({
     function getIcon(option: DisplayMode) {
       switch (option) {
         case DisplayMode.Grid:
-          return faThLarge;
+          return "th-large";
         case DisplayMode.List:
-          return faList;
+          return "list";
         case DisplayMode.Wall:
-          return faSquare;
+          return "square";
         case DisplayMode.Tagger:
-          return faTags;
+          return "tags";
         case DisplayMode.Rater:
-          return faStarHalfAlt;
+          return "star-half-alt";
       }
     }
     function getLabel(option: DisplayMode) {
@@ -116,7 +109,7 @@ export const ListViewOptions: React.FC<IListViewOptionsProps> = ({
     }
 
     return (
-      <ButtonGroup className="mb-2">
+      <ButtonGroup>
         {displayModeOptions.map((option) => (
           <OverlayTrigger
             key={option}
@@ -144,14 +137,20 @@ export const ListViewOptions: React.FC<IListViewOptionsProps> = ({
   }
 
   function maybeRenderZoom() {
-    if (
-      onSetZoom &&
-      (displayMode === DisplayMode.Grid || displayMode === DisplayMode.Rater)
-    ) {
+    let zoomable = false;
+    switch (displayMode){
+      case DisplayMode.Grid:
+        zoomable = true;
+        break;
+      case DisplayMode.Rater:
+        zoomable = true;
+        break;
+    }
+    if (onSetZoom && zoomable) {
       return (
-        <div className="ml-2 mb-2 d-none d-sm-inline-flex">
+        <div className="align-middle">
           <Form.Control
-            className="zoom-slider ml-1"
+            className="zoom-slider d-none d-sm-inline-flex ml-3"
             type="range"
             min={minZoom}
             max={maxZoom}
@@ -167,7 +166,7 @@ export const ListViewOptions: React.FC<IListViewOptionsProps> = ({
 
   return (
     <>
-      {maybeRenderDisplayModeOptions()}
+      <ButtonGroup>{maybeRenderDisplayModeOptions()}</ButtonGroup>
       {maybeRenderZoom()}
     </>
   );
