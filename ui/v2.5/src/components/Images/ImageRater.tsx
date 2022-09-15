@@ -14,10 +14,7 @@ import { useToast } from "src/hooks";
 
 interface IImageRaterProps {
   image: GQL.SlimImageDataFragment;
-  selecting?: boolean;
-  selected: boolean | undefined;
   zoomIndex: number;
-  onSelectedChanged: (selected: boolean, shiftKey: boolean) => void;
 }
 
 export const ImageRater: React.FC<IImageRaterProps> = (
@@ -153,17 +150,16 @@ export const ImageRater: React.FC<IImageRaterProps> = (
         </>
       }
       popovers={maybeRenderPopoverButtonGroup()}
-      selected={props.selected}
-      selecting={props.selecting}
-      onSelectedChanged={props.onSelectedChanged}
       details={
-        <RatingStars
-          value={props.image.rating ?? undefined}
-          onSetRating={(value) => {
-            onSave(getImageInput(value));
-          }}
-          disabled={isUpdating}
-        />
+        <div className={cx("image-card-rater-stars")}>
+          <RatingStars
+            value={props.image.rating ?? undefined}
+            onSetRating={(value) => {
+              onSave(getImageInput(value));
+            }}
+            disabled={isUpdating}
+          />
+        </div>
       }
     />
   );
