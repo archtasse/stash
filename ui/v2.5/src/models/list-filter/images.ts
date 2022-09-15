@@ -3,6 +3,7 @@ import {
   createMandatoryStringCriterionOption,
   createStringCriterionOption,
 } from "./criteria/criterion";
+import { PerformerFavoriteCriterionOption } from "./criteria/favorite";
 import { ImageIsMissingCriterionOption } from "./criteria/is-missing";
 import { OrganizedCriterionOption } from "./criteria/organized";
 import { PerformersCriterionOption } from "./criteria/performers";
@@ -18,9 +19,12 @@ import { DisplayMode } from "./types";
 
 const defaultSortBy = "path";
 
-const sortByOptions = ["o_counter", "filesize", ...MediaSortByOptions].map(
-  ListFilterOptions.createSortBy
-);
+const sortByOptions = [
+  "o_counter",
+  "filesize",
+  "file_count",
+  ...MediaSortByOptions,
+].map(ListFilterOptions.createSortBy);
 
 const displayModeOptions = [
   DisplayMode.Grid,
@@ -41,7 +45,10 @@ const criterionOptions = [
   PerformerTagsCriterionOption,
   PerformersCriterionOption,
   createMandatoryNumberCriterionOption("performer_count"),
+  createMandatoryNumberCriterionOption("performer_age"),
+  PerformerFavoriteCriterionOption,
   StudiosCriterionOption,
+  createMandatoryNumberCriterionOption("file_count"),
 ];
 export const ImageListFilterOptions = new ListFilterOptions(
   defaultSortBy,
