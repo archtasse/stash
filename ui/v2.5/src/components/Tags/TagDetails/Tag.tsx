@@ -1,4 +1,4 @@
-import { Tabs, Tab, Dropdown, Badge } from "react-bootstrap";
+import { Tabs, Tab, Dropdown } from "react-bootstrap";
 import React, { useEffect, useState } from "react";
 import { useParams, useHistory } from "react-router-dom";
 import { FormattedMessage, useIntl } from "react-intl";
@@ -12,15 +12,15 @@ import {
   useTagDestroy,
   mutateMetadataAutoTag,
 } from "src/core/StashService";
-import { ImageUtils } from "src/utils";
-import {
-  DetailsEditNavbar,
-  ErrorMessage,
-  Modal,
-  LoadingIndicator,
-  Icon,
-} from "src/components/Shared";
-import { useToast } from "src/hooks";
+import ImageUtils from "src/utils/image";
+import { Counter } from "src/components/Shared/Counter";
+import { DetailsEditNavbar } from "src/components/Shared/DetailsEditNavbar";
+import { ErrorMessage } from "src/components/Shared/ErrorMessage";
+import { ModalComponent } from "src/components/Shared/Modal";
+import { LoadingIndicator } from "src/components/Shared/LoadingIndicator";
+import { Icon } from "src/components/Shared/Icon";
+import { useToast } from "src/hooks/Toast";
+import { ConfigurationContext } from "src/hooks/Config";
 import { tagRelationHook } from "src/core/tags";
 import { TagScenesPanel } from "./TagScenesPanel";
 import { TagMarkersPanel } from "./TagMarkersPanel";
@@ -35,6 +35,7 @@ import {
   faSignOutAlt,
   faTrashAlt,
 } from "@fortawesome/free-solid-svg-icons";
+import { IUIConfig } from "src/core/config";
 
 interface IProps {
   tag: GQL.TagDataFragment;
@@ -48,6 +49,12 @@ const TagPage: React.FC<IProps> = ({ tag }) => {
   const history = useHistory();
   const Toast = useToast();
   const intl = useIntl();
+
+  // Configuration settings
+  const { configuration } = React.useContext(ConfigurationContext);
+  const abbreviateCounter =
+    (configuration?.ui as IUIConfig)?.abbreviateCounters ?? false;
+
   const { tab = "scenes" } = useParams<ITabParams>();
 
   // Editing state
@@ -78,7 +85,9 @@ const TagPage: React.FC<IProps> = ({ tag }) => {
   // set up hotkeys
   useEffect(() => {
     Mousetrap.bind("e", () => setIsEditing(true));
-    Mousetrap.bind("d d", () => onDelete());
+    Mousetrap.bind("d d", () => {
+      onDelete();
+    });
 
     return () => {
       if (isEditing) {
@@ -168,7 +177,7 @@ const TagPage: React.FC<IProps> = ({ tag }) => {
 
   function renderDeleteAlert() {
     return (
-      <Modal
+      <ModalComponent
         show={isDeleteAlertOpen}
         icon={faTrashAlt}
         accept={{
@@ -188,7 +197,7 @@ const TagPage: React.FC<IProps> = ({ tag }) => {
             }}
           />
         </p>
-      </Modal>
+      </ModalComponent>
     );
   }
 
@@ -267,6 +276,7 @@ const TagPage: React.FC<IProps> = ({ tag }) => {
               renderImage()
             )}
             <h2>{tag.name}</h2>
+            <p>{tag.description}</p>
           </div>
           {!isEditing ? (
             <>
@@ -308,9 +318,10 @@ const TagPage: React.FC<IProps> = ({ tag }) => {
               title={
                 <React.Fragment>
                   {intl.formatMessage({ id: "scenes" })}
-                  <Badge className="left-spacing" pill variant="secondary">
-                    {intl.formatNumber(tag.scene_count ?? 0)}
-                  </Badge>
+                  <Counter
+                    abbreviateCounter={abbreviateCounter}
+                    count={tag.scene_count ?? 0}
+                  />
                 </React.Fragment>
               }
             >
@@ -321,9 +332,10 @@ const TagPage: React.FC<IProps> = ({ tag }) => {
               title={
                 <React.Fragment>
                   {intl.formatMessage({ id: "images" })}
-                  <Badge className="left-spacing" pill variant="secondary">
-                    {intl.formatNumber(tag.image_count ?? 0)}
-                  </Badge>
+                  <Counter
+                    abbreviateCounter={abbreviateCounter}
+                    count={tag.image_count ?? 0}
+                  />
                 </React.Fragment>
               }
             >
@@ -334,9 +346,10 @@ const TagPage: React.FC<IProps> = ({ tag }) => {
               title={
                 <React.Fragment>
                   {intl.formatMessage({ id: "galleries" })}
-                  <Badge className="left-spacing" pill variant="secondary">
-                    {intl.formatNumber(tag.gallery_count ?? 0)}
-                  </Badge>
+                  <Counter
+                    abbreviateCounter={abbreviateCounter}
+                    count={tag.gallery_count ?? 0}
+                  />
                 </React.Fragment>
               }
             >
@@ -347,9 +360,10 @@ const TagPage: React.FC<IProps> = ({ tag }) => {
               title={
                 <React.Fragment>
                   {intl.formatMessage({ id: "markers" })}
-                  <Badge className="left-spacing" pill variant="secondary">
-                    {intl.formatNumber(tag.scene_marker_count ?? 0)}
-                  </Badge>
+                  <Counter
+                    abbreviateCounter={abbreviateCounter}
+                    count={tag.scene_marker_count ?? 0}
+                  />
                 </React.Fragment>
               }
             >
@@ -360,9 +374,10 @@ const TagPage: React.FC<IProps> = ({ tag }) => {
               title={
                 <React.Fragment>
                   {intl.formatMessage({ id: "performers" })}
-                  <Badge className="left-spacing" pill variant="secondary">
-                    {intl.formatNumber(tag.performer_count ?? 0)}
-                  </Badge>
+                  <Counter
+                    abbreviateCounter={abbreviateCounter}
+                    count={tag.performer_count ?? 0}
+                  />
                 </React.Fragment>
               }
             >

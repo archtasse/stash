@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import cx from "classnames";
 import { Button, Form, Spinner } from "react-bootstrap";
-import Icon from "src/components/Shared/Icon";
+import { Icon } from "src/components/Shared/Icon";
 import { useIntl } from "react-intl";
 import {
   faChevronDown,
@@ -106,6 +106,7 @@ export const QueueViewer: React.FC<IPlaylistViewer> = ({
       <div className="queue-controls">
         <div>
           <Form.Check
+            id="continue-checkbox"
             checked={continuePlaylist}
             label={intl.formatMessage({ id: "actions.continue" })}
             onChange={() => {

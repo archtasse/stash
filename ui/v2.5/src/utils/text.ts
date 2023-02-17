@@ -284,6 +284,26 @@ const sanitiseURL = (url?: string, siteURL?: URL) => {
   return `https://${url}`;
 };
 
+const domainFromURL = (urlString?: string, url?: URL) => {
+  if (url) {
+    return url.hostname;
+  } else if (urlString) {
+    var urlDomain = "";
+    try {
+      var sanitizedUrl = sanitiseURL(urlString);
+      if (sanitizedUrl) {
+        urlString = sanitizedUrl;
+      }
+      urlDomain = new URL(urlString).hostname;
+    } catch {
+      urlDomain = urlString; // We cant determine the hostname so we return the base string
+    }
+    return urlDomain;
+  } else {
+    return "";
+  }
+};
+
 const formatDate = (intl: IntlShape, date?: string, utc = true) => {
   if (!date) {
     return "";
@@ -305,6 +325,29 @@ const capitalize = (val: string) =>
     .replace(/^[-_]*(.)/, (_, c) => c.toUpperCase())
     .replace(/[-_]+(.)/g, (_, c) => ` ${c.toUpperCase()}`);
 
+type CountUnit = "" | "K" | "M" | "B";
+const CountUnits: CountUnit[] = ["", "K", "M", "B"];
+
+const abbreviateCounter = (counter: number = 0) => {
+  if (Number.isNaN(parseFloat(String(counter))) || !Number.isFinite(counter))
+    return { size: 0, unit: CountUnits[0] };
+
+  let unit = 0;
+  let digits = 0;
+  let count = counter;
+  while (count >= 1000 && unit + 1 < CountUnits.length) {
+    count /= 1000;
+    unit++;
+    digits = 1;
+  }
+
+  return {
+    size: count,
+    unit: CountUnits[unit],
+    digits: digits,
+  };
+};
+
 const TextUtils = {
   fileSize,
   formatFileSizeUnit,
@@ -316,12 +359,14 @@ const TextUtils = {
   bitRate,
   resolution,
   sanitiseURL,
+  domainFromURL,
   twitterURL,
   instagramURL,
   formatDate,
   formatDateTime,
   capitalize,
   secondsAsTimeString,
+  abbreviateCounter,
 };
 
 export default TextUtils;

@@ -11,14 +11,14 @@ import { LinkContainer } from "react-router-bootstrap";
 import { Link, NavLink, useLocation, useHistory } from "react-router-dom";
 import Mousetrap from "mousetrap";
 
-import { SessionUtils } from "src/utils";
-import Icon from "src/components/Shared/Icon";
+import SessionUtils from "src/utils/session";
+import { Icon } from "src/components/Shared/Icon";
 import { ConfigurationContext } from "src/hooks/Config";
 import { ManualStateContext } from "./Help/context";
 import { SettingsButton } from "./SettingsButton";
 import {
   faBars,
-  faChartBar,
+  faChartColumn,
   faFilm,
   faHeart,
   faImage,
@@ -95,6 +95,7 @@ const allMenuItems: IMenuItem[] = [
     href: "/scenes",
     icon: faPlayCircle,
     hotkey: "g s",
+    userCreatable: true,
   },
   {
     name: "images",
@@ -217,8 +218,14 @@ export const MainNavbar: React.FC = () => {
     [history]
   );
 
-  const { pathname } = location;
-  const newPath = newPathsList.includes(pathname) ? `${pathname}/new` : null;
+  const pathname = location.pathname.replace(/\/$/, "");
+  let newPath = newPathsList.includes(pathname) ? `${pathname}/new` : null;
+  if (newPath !== null) {
+    let queryParam = new URLSearchParams(location.search).get("q");
+    if (queryParam) {
+      newPath += "?q=" + encodeURIComponent(queryParam);
+    }
+  }
 
   // set up hotkeys
   useEffect(() => {
@@ -230,7 +237,7 @@ export const MainNavbar: React.FC = () => {
     );
 
     if (newPath) {
-      Mousetrap.bind("n", () => history.push(newPath));
+      Mousetrap.bind("n", () => history.push(String(newPath)));
     }
 
     return () => {
@@ -289,7 +296,7 @@ export const MainNavbar: React.FC = () => {
             className="minimal d-flex align-items-center h-100"
             title={intl.formatMessage({ id: "statistics" })}
           >
-            <Icon icon={faChartBar} />
+            <Icon icon={faChartColumn} />
           </Button>
         </NavLink>
         <NavLink

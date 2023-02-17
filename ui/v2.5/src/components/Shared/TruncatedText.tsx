@@ -8,14 +8,14 @@ const CLASSNAME = "TruncatedText";
 const CLASSNAME_TOOLTIP = `${CLASSNAME}-tooltip`;
 
 interface ITruncatedTextProps {
-  text?: string | null;
+  text?: JSX.Element | string | null;
   lineCount?: number;
   placement?: Placement;
   delay?: number;
   className?: string;
 }
 
-const TruncatedText: React.FC<ITruncatedTextProps> = ({
+export const TruncatedText: React.FC<ITruncatedTextProps> = ({
   text,
   className,
   lineCount = 1,
@@ -66,5 +66,3 @@ const TruncatedText: React.FC<ITruncatedTextProps> = ({
     </div>
   );
 };
-
-export default TruncatedText;

@@ -1,4 +1,4 @@
-import { Tabs, Tab, Badge } from "react-bootstrap";
+import { Tabs, Tab } from "react-bootstrap";
 import React, { useEffect, useState } from "react";
 import { useParams, useHistory } from "react-router-dom";
 import { FormattedMessage, useIntl } from "react-intl";
@@ -12,14 +12,14 @@ import {
   useStudioDestroy,
   mutateMetadataAutoTag,
 } from "src/core/StashService";
-import { ImageUtils } from "src/utils";
-import {
-  DetailsEditNavbar,
-  Modal,
-  LoadingIndicator,
-  ErrorMessage,
-} from "src/components/Shared";
-import { useToast } from "src/hooks";
+import ImageUtils from "src/utils/image";
+import { Counter } from "src/components/Shared/Counter";
+import { DetailsEditNavbar } from "src/components/Shared/DetailsEditNavbar";
+import { ModalComponent } from "src/components/Shared/Modal";
+import { LoadingIndicator } from "src/components/Shared/LoadingIndicator";
+import { ErrorMessage } from "src/components/Shared/ErrorMessage";
+import { useToast } from "src/hooks/Toast";
+import { ConfigurationContext } from "src/hooks/Config";
 import { StudioScenesPanel } from "./StudioScenesPanel";
 import { StudioGalleriesPanel } from "./StudioGalleriesPanel";
 import { StudioImagesPanel } from "./StudioImagesPanel";
@@ -29,6 +29,7 @@ import { StudioEditPanel } from "./StudioEditPanel";
 import { StudioDetailsPanel } from "./StudioDetailsPanel";
 import { StudioMoviesPanel } from "./StudioMoviesPanel";
 import { faTrashAlt } from "@fortawesome/free-solid-svg-icons";
+import { IUIConfig } from "src/core/config";
 
 interface IProps {
   studio: GQL.StudioDataFragment;
@@ -44,6 +45,11 @@ const StudioPage: React.FC<IProps> = ({ studio }) => {
   const intl = useIntl();
   const { tab = "details" } = useParams<IStudioParams>();
 
+  // Configuration settings
+  const { configuration } = React.useContext(ConfigurationContext);
+  const abbreviateCounter =
+    (configuration?.ui as IUIConfig)?.abbreviateCounters ?? false;
+
   // Editing state
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState<boolean>(false);
@@ -57,7 +63,9 @@ const StudioPage: React.FC<IProps> = ({ studio }) => {
   // set up hotkeys
   useEffect(() => {
     Mousetrap.bind("e", () => setIsEditing(true));
-    Mousetrap.bind("d d", () => onDelete());
+    Mousetrap.bind("d d", () => {
+      onDelete();
+    });
 
     return () => {
       Mousetrap.unbind("e");
@@ -111,7 +119,7 @@ const StudioPage: React.FC<IProps> = ({ studio }) => {
 
   function renderDeleteAlert() {
     return (
-      <Modal
+      <ModalComponent
         show={isDeleteAlertOpen}
         icon={faTrashAlt}
         accept={{
@@ -131,7 +139,7 @@ const StudioPage: React.FC<IProps> = ({ studio }) => {
             }}
           />
         </p>
-      </Modal>
+      </ModalComponent>
     );
   }
 
@@ -222,9 +230,10 @@ const StudioPage: React.FC<IProps> = ({ studio }) => {
             title={
               <React.Fragment>
                 {intl.formatMessage({ id: "scenes" })}
-                <Badge className="left-spacing" pill variant="secondary">
-                  {intl.formatNumber(studio.scene_count ?? 0)}
-                </Badge>
+                <Counter
+                  abbreviateCounter={abbreviateCounter}
+                  count={studio.scene_count ?? 0}
+                />
               </React.Fragment>
             }
           >
@@ -235,9 +244,10 @@ const StudioPage: React.FC<IProps> = ({ studio }) => {
             title={
               <React.Fragment>
                 {intl.formatMessage({ id: "galleries" })}
-                <Badge className="left-spacing" pill variant="secondary">
-                  {intl.formatNumber(studio.gallery_count ?? 0)}
-                </Badge>
+                <Counter
+                  abbreviateCounter={abbreviateCounter}
+                  count={studio.gallery_count ?? 0}
+                />
               </React.Fragment>
             }
           >
@@ -248,9 +258,10 @@ const StudioPage: React.FC<IProps> = ({ studio }) => {
             title={
               <React.Fragment>
                 {intl.formatMessage({ id: "images" })}
-                <Badge className="left-spacing" pill variant="secondary">
-                  {intl.formatNumber(studio.image_count ?? 0)}
-                </Badge>
+                <Counter
+                  abbreviateCounter={abbreviateCounter}
+                  count={studio.image_count ?? 0}
+                />
               </React.Fragment>
             }
           >
@@ -258,7 +269,15 @@ const StudioPage: React.FC<IProps> = ({ studio }) => {
           </Tab>
           <Tab
             eventKey="performers"
-            title={intl.formatMessage({ id: "performers" })}
+            title={
+              <React.Fragment>
+                {intl.formatMessage({ id: "performers" })}
+                <Counter
+                  abbreviateCounter={abbreviateCounter}
+                  count={studio.performer_count ?? 0}
+                />
+              </React.Fragment>
+            }
           >
             <StudioPerformersPanel studio={studio} />
           </Tab>
@@ -267,9 +286,10 @@ const StudioPage: React.FC<IProps> = ({ studio }) => {
             title={
               <React.Fragment>
                 {intl.formatMessage({ id: "movies" })}
-                <Badge className="left-spacing" pill variant="secondary">
-                  {intl.formatNumber(studio.movie_count ?? 0)}
-                </Badge>
+                <Counter
+                  abbreviateCounter={abbreviateCounter}
+                  count={studio.movie_count ?? 0}
+                />
               </React.Fragment>
             }
           >
@@ -280,9 +300,10 @@ const StudioPage: React.FC<IProps> = ({ studio }) => {
             title={
               <React.Fragment>
                 {intl.formatMessage({ id: "subsidiary_studios" })}
-                <Badge className="left-spacing" pill variant="secondary">
-                  {intl.formatNumber(studio.child_studios?.length)}
-                </Badge>
+                <Counter
+                  abbreviateCounter={false}
+                  count={studio.child_studios?.length ?? 0}
+                />
               </React.Fragment>
             }
           >

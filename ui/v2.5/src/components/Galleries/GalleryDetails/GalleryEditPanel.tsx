@@ -25,36 +25,31 @@ import {
   TagSelect,
   SceneSelect,
   StudioSelect,
-  Icon,
-  LoadingIndicator,
-  URLField,
-} from "src/components/Shared";
-import { useToast } from "src/hooks";
+} from "src/components/Shared/Select";
+import { Icon } from "src/components/Shared/Icon";
+import { LoadingIndicator } from "src/components/Shared/LoadingIndicator";
+import { URLField } from "src/components/Shared/URLField";
+import { useToast } from "src/hooks/Toast";
 import { useFormik } from "formik";
-import { FormUtils } from "src/utils";
-import { RatingStars } from "src/components/Scenes/SceneDetails/RatingStars";
+import FormUtils from "src/utils/form";
+import { RatingSystem } from "src/components/Shared/Rating/RatingSystem";
 import { GalleryScrapeDialog } from "./GalleryScrapeDialog";
 import { faSyncAlt } from "@fortawesome/free-solid-svg-icons";
 import { galleryTitle } from "src/core/galleries";
+import { useRatingKeybinds } from "src/hooks/keybinds";
+import { ConfigurationContext } from "src/hooks/Config";
 
 interface IProps {
+  gallery: Partial<GQL.GalleryDataFragment>;
   isVisible: boolean;
   onDelete: () => void;
 }
 
-interface INewProps {
-  isNew: true;
-  gallery: undefined;
-}
-
-interface IExistingProps {
-  isNew: false;
-  gallery: GQL.GalleryDataFragment;
-}
-
-export const GalleryEditPanel: React.FC<
-  IProps & (INewProps | IExistingProps)
-> = ({ gallery, isNew, isVisible, onDelete }) => {
+export const GalleryEditPanel: React.FC<IProps> = ({
+  gallery,
+  isVisible,
+  onDelete,
+}) => {
   const intl = useIntl();
   const Toast = useToast();
   const history = useHistory();
@@ -65,13 +60,14 @@ export const GalleryEditPanel: React.FC<
     }))
   );
 
+  const isNew = gallery.id === undefined;
+  const { configuration: stashConfig } = React.useContext(ConfigurationContext);
+
   const Scrapers = useListGalleryScrapers();
   const [queryableScrapers, setQueryableScrapers] = useState<GQL.Scraper[]>([]);
 
-  const [
-    scrapedGallery,
-    setScrapedGallery,
-  ] = useState<GQL.ScrapedGallery | null>();
+  const [scrapedGallery, setScrapedGallery] =
+    useState<GQL.ScrapedGallery | null>();
 
   // Network state
   const [isLoading, setIsLoading] = useState(false);
@@ -79,12 +75,17 @@ export const GalleryEditPanel: React.FC<
   const [createGallery] = useGalleryCreate();
   const [updateGallery] = useGalleryUpdate();
 
+  const titleRequired =
+    isNew || (gallery?.files?.length === 0 && !gallery?.folder);
+
   const schema = yup.object({
-    title: yup.string().required(),
+    title: titleRequired
+      ? yup.string().required()
+      : yup.string().optional().nullable(),
     details: yup.string().optional().nullable(),
     url: yup.string().optional().nullable(),
     date: yup.string().optional().nullable(),
-    rating: yup.number().optional().nullable(),
+    rating100: yup.number().optional().nullable(),
     studio_id: yup.string().optional().nullable(),
     performer_ids: yup.array(yup.string().required()).optional().nullable(),
     tag_ids: yup.array(yup.string().required()).optional().nullable(),
@@ -96,7 +97,7 @@ export const GalleryEditPanel: React.FC<
     details: gallery?.details ?? "",
     url: gallery?.url ?? "",
     date: gallery?.date ?? "",
-    rating: gallery?.rating ?? null,
+    rating100: gallery?.rating100 ?? null,
     studio_id: gallery?.studio?.id,
     performer_ids: (gallery?.performers ?? []).map((p) => p.id),
     tag_ids: (gallery?.tags ?? []).map((t) => t.id),
@@ -111,8 +112,13 @@ export const GalleryEditPanel: React.FC<
     onSubmit: (values) => onSave(getGalleryInput(values)),
   });
 
+  // always dirty if creating a new gallery with a title
+  if (isNew && gallery?.title) {
+    formik.dirty = true;
+  }
+
   function setRating(v: number) {
-    formik.setFieldValue("rating", v);
+    formik.setFieldValue("rating100", v);
   }
 
   interface ISceneSelectValue {
@@ -128,6 +134,12 @@ export const GalleryEditPanel: React.FC<
     );
   }
 
+  useRatingKeybinds(
+    isVisible,
+    stashConfig?.ui?.ratingSystemOptions?.type,
+    setRating
+  );
+
   useEffect(() => {
     if (isVisible) {
       Mousetrap.bind("s s", () => {
@@ -137,35 +149,9 @@ export const GalleryEditPanel: React.FC<
         onDelete();
       });
 
-      // numeric keypresses get caught by jwplayer, so blur the element
-      // if the rating sequence is started
-      Mousetrap.bind("r", () => {
-        if (document.activeElement instanceof HTMLElement) {
-          document.activeElement.blur();
-        }
-
-        Mousetrap.bind("0", () => setRating(NaN));
-        Mousetrap.bind("1", () => setRating(1));
-        Mousetrap.bind("2", () => setRating(2));
-        Mousetrap.bind("3", () => setRating(3));
-        Mousetrap.bind("4", () => setRating(4));
-        Mousetrap.bind("5", () => setRating(5));
-
-        setTimeout(() => {
-          Mousetrap.unbind("0");
-          Mousetrap.unbind("1");
-          Mousetrap.unbind("2");
-          Mousetrap.unbind("3");
-          Mousetrap.unbind("4");
-          Mousetrap.unbind("5");
-        }, 1000);
-      });
-
       return () => {
         Mousetrap.unbind("s s");
         Mousetrap.unbind("d d");
-
-        Mousetrap.unbind("r");
       };
     }
   });
@@ -240,7 +226,7 @@ export const GalleryEditPanel: React.FC<
   }
 
   async function onScrapeClicked(scraper: GQL.Scraper) {
-    if (!gallery) return;
+    if (!gallery || !gallery.id) return;
 
     setIsLoading(true);
     try {
@@ -478,15 +464,14 @@ export const GalleryEditPanel: React.FC<
                 title: intl.formatMessage({ id: "rating" }),
               })}
               <Col xs={9}>
-                <RatingStars
-                  value={formik.values.rating ?? undefined}
+                <RatingSystem
+                  value={formik.values.rating100 ?? undefined}
                   onSetRating={(value) =>
-                    formik.setFieldValue("rating", value ?? null)
+                    formik.setFieldValue("rating100", value ?? null)
                   }
                 />
               </Col>
             </Form.Group>
-
             <Form.Group controlId="studio" as={Row}>
               {FormUtils.renderLabel({
                 title: intl.formatMessage({ id: "studio" }),
@@ -561,8 +546,9 @@ export const GalleryEditPanel: React.FC<
               })}
               <Col sm={9} xl={12}>
                 <SceneSelect
-                  scenes={scenes}
+                  selected={scenes}
                   onSelect={(items) => onSetScenes(items)}
+                  isMulti
                 />
               </Col>
             </Form.Group>

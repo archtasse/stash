@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/doug-martin/goqu/v9"
 	"github.com/doug-martin/goqu/v9/exp"
@@ -30,14 +29,14 @@ const (
 )
 
 type basicFileRow struct {
-	ID             file.ID       `db:"id" goqu:"skipinsert"`
-	Basename       string        `db:"basename"`
-	ZipFileID      null.Int      `db:"zip_file_id"`
-	ParentFolderID file.FolderID `db:"parent_folder_id"`
-	Size           int64         `db:"size"`
-	ModTime        time.Time     `db:"mod_time"`
-	CreatedAt      time.Time     `db:"created_at"`
-	UpdatedAt      time.Time     `db:"updated_at"`
+	ID             file.ID                `db:"id" goqu:"skipinsert"`
+	Basename       string                 `db:"basename"`
+	ZipFileID      null.Int               `db:"zip_file_id"`
+	ParentFolderID file.FolderID          `db:"parent_folder_id"`
+	Size           int64                  `db:"size"`
+	ModTime        models.SQLiteTimestamp `db:"mod_time"`
+	CreatedAt      models.SQLiteTimestamp `db:"created_at"`
+	UpdatedAt      models.SQLiteTimestamp `db:"updated_at"`
 }
 
 func (r *basicFileRow) fromBasicFile(o file.BaseFile) {
@@ -46,9 +45,9 @@ func (r *basicFileRow) fromBasicFile(o file.BaseFile) {
 	r.ZipFileID = nullIntFromFileIDPtr(o.ZipFileID)
 	r.ParentFolderID = o.ParentFolderID
 	r.Size = o.Size
-	r.ModTime = o.ModTime
-	r.CreatedAt = o.CreatedAt
-	r.UpdatedAt = o.UpdatedAt
+	r.ModTime = models.SQLiteTimestamp{Timestamp: o.ModTime}
+	r.CreatedAt = models.SQLiteTimestamp{Timestamp: o.CreatedAt}
+	r.UpdatedAt = models.SQLiteTimestamp{Timestamp: o.UpdatedAt}
 }
 
 type videoFileRow struct {
@@ -167,14 +166,14 @@ func (f *imageFileQueryRow) resolve() *file.ImageFile {
 }
 
 type fileQueryRow struct {
-	FileID         null.Int    `db:"file_id"`
-	Basename       null.String `db:"basename"`
-	ZipFileID      null.Int    `db:"zip_file_id"`
-	ParentFolderID null.Int    `db:"parent_folder_id"`
-	Size           null.Int    `db:"size"`
-	ModTime        null.Time   `db:"mod_time"`
-	CreatedAt      null.Time   `db:"file_created_at"`
-	UpdatedAt      null.Time   `db:"file_updated_at"`
+	FileID         null.Int                   `db:"file_id"`
+	Basename       null.String                `db:"basename"`
+	ZipFileID      null.Int                   `db:"zip_file_id"`
+	ParentFolderID null.Int                   `db:"parent_folder_id"`
+	Size           null.Int                   `db:"size"`
+	ModTime        models.NullSQLiteTimestamp `db:"mod_time"`
+	CreatedAt      models.NullSQLiteTimestamp `db:"file_created_at"`
+	UpdatedAt      models.NullSQLiteTimestamp `db:"file_updated_at"`
 
 	ZipBasename   null.String `db:"zip_basename"`
 	ZipFolderPath null.String `db:"zip_folder_path"`
@@ -190,14 +189,14 @@ func (r *fileQueryRow) resolve() file.File {
 		ID: file.ID(r.FileID.Int64),
 		DirEntry: file.DirEntry{
 			ZipFileID: nullIntFileIDPtr(r.ZipFileID),
-			ModTime:   r.ModTime.Time,
+			ModTime:   r.ModTime.Timestamp,
 		},
 		Path:           filepath.Join(r.FolderPath.String, r.Basename.String),
 		ParentFolderID: file.FolderID(r.ParentFolderID.Int64),
 		Basename:       r.Basename.String,
 		Size:           r.Size.Int64,
-		CreatedAt:      r.CreatedAt.Time,
-		UpdatedAt:      r.UpdatedAt.Time,
+		CreatedAt:      r.CreatedAt.Timestamp,
+		UpdatedAt:      r.UpdatedAt.Timestamp,
 	}
 
 	if basic.ZipFileID != nil && r.ZipFolderPath.Valid && r.ZipBasename.Valid {
@@ -576,6 +575,23 @@ func (qb *FileStore) find(ctx context.Context, id file.ID) (file.File, error) {
 
 // FindByPath returns the first file that matches the given path. Wildcard characters are supported.
 func (qb *FileStore) FindByPath(ctx context.Context, p string) (file.File, error) {
+
+	ret, err := qb.FindAllByPath(ctx, p)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(ret) == 0 {
+		return nil, nil
+	}
+
+	return ret[0], nil
+}
+
+// FindAllByPath returns all the files that match the given path.
+// Wildcard characters are supported.
+func (qb *FileStore) FindAllByPath(ctx context.Context, p string) ([]file.File, error) {
 	// separate basename from path
 	basename := filepath.Base(p)
 	dirName := filepath.Dir(p)
@@ -587,12 +603,22 @@ func (qb *FileStore) FindByPath(ctx context.Context, p string) (file.File, error
 	table := qb.table()
 	folderTable := folderTableMgr.table
 
-	q := qb.selectDataset().Prepared(true).Where(
-		folderTable.Col("path").Like(dirName),
-		table.Col("basename").Like(basename),
-	)
+	// like uses case-insensitive matching. Only use like if wildcards are used
+	q := qb.selectDataset().Prepared(true)
 
-	ret, err := qb.get(ctx, q)
+	if strings.Contains(basename, "%") || strings.Contains(dirName, "%") {
+		q = q.Where(
+			folderTable.Col("path").Like(dirName),
+			table.Col("basename").Like(basename),
+		)
+	} else {
+		q = q.Where(
+			folderTable.Col("path").Eq(dirName),
+			table.Col("basename").Eq(basename),
+		)
+	}
+
+	ret, err := qb.getMany(ctx, q)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("getting file by path %s: %w", p, err)
 	}
@@ -687,6 +713,40 @@ func (qb *FileStore) FindByZipFileID(ctx context.Context, zipFileID file.ID) ([]
 	return qb.getMany(ctx, q)
 }
 
+func (qb *FileStore) IsPrimary(ctx context.Context, fileID file.ID) (bool, error) {
+	joinTables := []exp.IdentifierExpression{
+		scenesFilesJoinTable,
+		galleriesFilesJoinTable,
+		imagesFilesJoinTable,
+	}
+
+	var sq *goqu.SelectDataset
+
+	for _, t := range joinTables {
+		qq := dialect.From(t).Select(t.Col(fileIDColumn)).Where(
+			t.Col(fileIDColumn).Eq(fileID),
+			t.Col("primary").Eq(1),
+		)
+
+		if sq == nil {
+			sq = qq
+		} else {
+			sq = sq.Union(qq)
+		}
+	}
+
+	q := dialect.Select(goqu.COUNT("*").As("count")).Prepared(true).From(
+		sq,
+	)
+
+	var ret int
+	if err := querySimple(ctx, q, &ret); err != nil {
+		return false, err
+	}
+
+	return ret > 0, nil
+}
+
 func (qb *FileStore) validateFilter(fileFilter *models.FileFilterType) error {
 	const and = "AND"
 	const or = "OR"
@@ -753,7 +813,8 @@ func (qb *FileStore) Query(ctx context.Context, options models.FileQueryOptions)
 	distinctIDs(&query, fileTable)
 
 	if q := findFilter.Q; q != nil && *q != "" {
-		searchColumns := []string{"folders.path", "files.basename"}
+		filepathColumn := "folders.path || '" + string(filepath.Separator) + "' || files.basename"
+		searchColumns := []string{filepathColumn}
 		query.parseQueryString(searchColumns, *q)
 	}
 
@@ -762,7 +823,9 @@ func (qb *FileStore) Query(ctx context.Context, options models.FileQueryOptions)
 	}
 	filter := qb.makeFilter(ctx, fileFilter)
 
-	query.addFilter(filter)
+	if err := query.addFilter(filter); err != nil {
+		return nil, err
+	}
 
 	qb.setQuerySort(&query, findFilter)
 	query.sortAndPagination += getPagination(findFilter)

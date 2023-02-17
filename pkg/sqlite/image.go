@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
-	"time"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/stashapp/stash/pkg/file"
@@ -28,25 +27,32 @@ const (
 )
 
 type imageRow struct {
-	ID        int         `db:"id" goqu:"skipinsert"`
-	Title     zero.String `db:"title"`
-	Rating    null.Int    `db:"rating"`
-	Organized bool        `db:"organized"`
-	OCounter  int         `db:"o_counter"`
-	StudioID  null.Int    `db:"studio_id,omitempty"`
-	CreatedAt time.Time   `db:"created_at"`
-	UpdatedAt time.Time   `db:"updated_at"`
+	ID    int         `db:"id" goqu:"skipinsert"`
+	Title zero.String `db:"title"`
+	// expressed as 1-100
+	Rating    null.Int               `db:"rating"`
+	URL       zero.String            `db:"url"`
+	Date      models.SQLiteDate      `db:"date"`
+	Organized bool                   `db:"organized"`
+	OCounter  int                    `db:"o_counter"`
+	StudioID  null.Int               `db:"studio_id,omitempty"`
+	CreatedAt models.SQLiteTimestamp `db:"created_at"`
+	UpdatedAt models.SQLiteTimestamp `db:"updated_at"`
 }
 
 func (r *imageRow) fromImage(i models.Image) {
 	r.ID = i.ID
 	r.Title = zero.StringFrom(i.Title)
 	r.Rating = intFromPtr(i.Rating)
+	r.URL = zero.StringFrom(i.URL)
+	if i.Date != nil {
+		_ = r.Date.Scan(i.Date.Time)
+	}
 	r.Organized = i.Organized
 	r.OCounter = i.OCounter
 	r.StudioID = intFromPtr(i.StudioID)
-	r.CreatedAt = i.CreatedAt
-	r.UpdatedAt = i.UpdatedAt
+	r.CreatedAt = models.SQLiteTimestamp{Timestamp: i.CreatedAt}
+	r.UpdatedAt = models.SQLiteTimestamp{Timestamp: i.UpdatedAt}
 }
 
 type imageQueryRow struct {
@@ -62,6 +68,8 @@ func (r *imageQueryRow) resolve() *models.Image {
 		ID:        r.ID,
 		Title:     r.Title.String,
 		Rating:    nullIntPtr(r.Rating),
+		URL:       r.URL.String,
+		Date:      r.Date.DatePtr(),
 		Organized: r.Organized,
 		OCounter:  r.OCounter,
 		StudioID:  nullIntPtr(r.StudioID),
@@ -69,8 +77,8 @@ func (r *imageQueryRow) resolve() *models.Image {
 		PrimaryFileID: nullIntFileIDPtr(r.PrimaryFileID),
 		Checksum:      r.PrimaryFileChecksum.String,
 
-		CreatedAt: r.CreatedAt,
-		UpdatedAt: r.UpdatedAt,
+		CreatedAt: r.CreatedAt.Timestamp,
+		UpdatedAt: r.UpdatedAt.Timestamp,
 	}
 
 	if r.PrimaryFileFolderPath.Valid && r.PrimaryFileBasename.Valid {
@@ -87,11 +95,13 @@ type imageRowRecord struct {
 func (r *imageRowRecord) fromPartial(i models.ImagePartial) {
 	r.setNullString("title", i.Title)
 	r.setNullInt("rating", i.Rating)
+	r.setNullString("url", i.URL)
+	r.setSQLiteDate("date", i.Date)
 	r.setBool("organized", i.Organized)
 	r.setInt("o_counter", i.OCounter)
 	r.setNullInt("studio_id", i.StudioID)
-	r.setTime("created_at", i.CreatedAt)
-	r.setTime("updated_at", i.UpdatedAt)
+	r.setSQLiteTimestamp("created_at", i.CreatedAt)
+	r.setSQLiteTimestamp("updated_at", i.UpdatedAt)
 }
 
 type ImageStore struct {
@@ -620,6 +630,7 @@ func (qb *ImageStore) makeFilter(ctx context.Context, imageFilter *models.ImageF
 		query.not(qb.makeFilter(ctx, imageFilter.Not))
 	}
 
+	query.handleCriterion(ctx, intCriterionHandler(imageFilter.ID, "images.id", nil))
 	query.handleCriterion(ctx, criterionHandlerFunc(func(ctx context.Context, f *filterBuilder) {
 		if imageFilter.Checksum != nil {
 			qb.addImagesFilesTable(f)
@@ -632,9 +643,13 @@ func (qb *ImageStore) makeFilter(ctx context.Context, imageFilter *models.ImageF
 
 	query.handleCriterion(ctx, pathCriterionHandler(imageFilter.Path, "folders.path", "files.basename", qb.addFoldersTable))
 	query.handleCriterion(ctx, imageFileCountCriterionHandler(qb, imageFilter.FileCount))
-	query.handleCriterion(ctx, intCriterionHandler(imageFilter.Rating, "images.rating", nil))
+	query.handleCriterion(ctx, intCriterionHandler(imageFilter.Rating100, "images.rating", nil))
+	// legacy rating handler
+	query.handleCriterion(ctx, rating5CriterionHandler(imageFilter.Rating, "images.rating", nil))
 	query.handleCriterion(ctx, intCriterionHandler(imageFilter.OCounter, "images.o_counter", nil))
 	query.handleCriterion(ctx, boolCriterionHandler(imageFilter.Organized, "images.organized", nil))
+	query.handleCriterion(ctx, dateCriterionHandler(imageFilter.Date, "images.date"))
+	query.handleCriterion(ctx, stringCriterionHandler(imageFilter.URL, "images.url"))
 
 	query.handleCriterion(ctx, resolutionCriterionHandler(imageFilter.Resolution, "image_files.height", "image_files.width", qb.addImageFilesTable))
 	query.handleCriterion(ctx, imageIsMissingCriterionHandler(qb, imageFilter.IsMissing))
@@ -647,6 +662,8 @@ func (qb *ImageStore) makeFilter(ctx context.Context, imageFilter *models.ImageF
 	query.handleCriterion(ctx, imageStudioCriterionHandler(qb, imageFilter.Studios))
 	query.handleCriterion(ctx, imagePerformerTagsCriterionHandler(qb, imageFilter.PerformerTags))
 	query.handleCriterion(ctx, imagePerformerFavoriteCriterionHandler(imageFilter.PerformerFavorite))
+	query.handleCriterion(ctx, timestampCriterionHandler(imageFilter.CreatedAt, "images.created_at"))
+	query.handleCriterion(ctx, timestampCriterionHandler(imageFilter.UpdatedAt, "images.updated_at"))
 
 	return query
 }
@@ -701,7 +718,8 @@ func (qb *ImageStore) makeQuery(ctx context.Context, imageFilter *models.ImageFi
 			},
 		)
 
-		searchColumns := []string{"images.title", "folders.path", "files.basename", "files_fingerprints.fingerprint"}
+		filepathColumn := "folders.path || '" + string(filepath.Separator) + "' || files.basename"
+		searchColumns := []string{"images.title", filepathColumn, "files_fingerprints.fingerprint"}
 		query.parseQueryString(searchColumns, *q)
 	}
 
@@ -710,7 +728,9 @@ func (qb *ImageStore) makeQuery(ctx context.Context, imageFilter *models.ImageFi
 	}
 	filter := qb.makeFilter(ctx, imageFilter)
 
-	query.addFilter(filter)
+	if err := query.addFilter(filter); err != nil {
+		return nil, err
+	}
 
 	qb.setImageSortAndPagination(&query, findFilter)
 
@@ -746,7 +766,7 @@ func (qb *ImageStore) queryGroupedFields(ctx context.Context, options models.Ima
 	aggregateQuery := qb.newQuery()
 
 	if options.Count {
-		aggregateQuery.addColumn("COUNT(temp.id) as total")
+		aggregateQuery.addColumn("COUNT(DISTINCT temp.id) as total")
 	}
 
 	// TODO - this doesn't work yet
@@ -923,7 +943,6 @@ func imageStudioCriterionHandler(qb *ImageStore, studios *models.HierarchicalMul
 		primaryTable: imageTable,
 		foreignTable: studioTable,
 		foreignFK:    studioIDColumn,
-		derivedTable: "studio",
 		parentFK:     "parent_id",
 	}
 
@@ -990,13 +1009,17 @@ func (qb *ImageStore) setImageSortAndPagination(q *queryBuilder, findFilter *mod
 			)
 		}
 
-		switch sort {
-		case "path":
-			addFilesJoin()
+		addFolderJoin := func() {
 			q.addJoins(join{
 				table:    folderTable,
 				onClause: "files.parent_folder_id = folders.id",
 			})
+		}
+
+		switch sort {
+		case "path":
+			addFilesJoin()
+			addFolderJoin()
 			sortClause = " ORDER BY folders.path " + direction + ", files.basename " + direction
 		case "file_count":
 			sortClause = getCountSort(imageTable, imagesFilesTable, imageIDColumn, direction)
@@ -1007,6 +1030,10 @@ func (qb *ImageStore) setImageSortAndPagination(q *queryBuilder, findFilter *mod
 		case "mod_time", "filesize":
 			addFilesJoin()
 			sortClause = getSort(sort, direction, "files")
+		case "title":
+			addFilesJoin()
+			addFolderJoin()
+			sortClause = " ORDER BY COALESCE(images.title, files.basename) COLLATE NATURAL_CS " + direction + ", folders.path " + direction
 		default:
 			sortClause = getSort(sort, direction, "images")
 		}
@@ -1077,7 +1104,9 @@ func (qb *ImageStore) tagsRepository() *joinRepository {
 			tableName: imagesTagsTable,
 			idColumn:  imageIDColumn,
 		},
-		fkColumn: tagIDColumn,
+		fkColumn:     tagIDColumn,
+		foreignTable: tagTable,
+		orderBy:      "tags.name ASC",
 	}
 }
 

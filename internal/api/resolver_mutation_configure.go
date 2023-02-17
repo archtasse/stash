@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"regexp"
 
 	"github.com/stashapp/stash/internal/manager"
 	"github.com/stashapp/stash/internal/manager/config"
@@ -58,7 +59,7 @@ func (r *mutationResolver) ConfigureGeneral(ctx context.Context, input ConfigGen
 	}
 
 	validateDir := func(key string, value string, optional bool) error {
-		if err := checkConfigOverride(config.Metadata); err != nil {
+		if err := checkConfigOverride(key); err != nil {
 			return err
 		}
 
@@ -82,6 +83,15 @@ func (r *mutationResolver) ConfigureGeneral(ctx context.Context, input ConfigGen
 			return makeConfigGeneralResult(), fmt.Errorf("invalid database path, use extension db, sqlite, or sqlite3")
 		}
 		c.Set(config.Database, input.DatabasePath)
+	}
+
+	existingBackupDirectoryPath := c.GetBackupDirectoryPath()
+	if input.BackupDirectoryPath != nil && existingBackupDirectoryPath != *input.BackupDirectoryPath {
+		if err := validateDir(config.BackupDirectoryPath, *input.BackupDirectoryPath, true); err != nil {
+			return makeConfigGeneralResult(), err
+		}
+
+		c.Set(config.BackupDirectoryPath, input.BackupDirectoryPath)
 	}
 
 	existingGeneratedPath := c.GetGeneratedPath()
@@ -218,10 +228,22 @@ func (r *mutationResolver) ConfigureGeneral(ctx context.Context, input ConfigGen
 	}
 
 	if input.Excludes != nil {
+		for _, r := range input.Excludes {
+			_, err := regexp.Compile(r)
+			if err != nil {
+				return makeConfigGeneralResult(), fmt.Errorf("video exclusion pattern '%v' invalid: %w", r, err)
+			}
+		}
 		c.Set(config.Exclude, input.Excludes)
 	}
 
 	if input.ImageExcludes != nil {
+		for _, r := range input.ImageExcludes {
+			_, err := regexp.Compile(r)
+			if err != nil {
+				return makeConfigGeneralResult(), fmt.Errorf("image/gallery exclusion pattern '%v' invalid: %w", r, err)
+			}
+		}
 		c.Set(config.ImageExclude, input.ImageExcludes)
 	}
 
@@ -269,6 +291,19 @@ func (r *mutationResolver) ConfigureGeneral(ctx context.Context, input ConfigGen
 
 	if input.PythonPath != nil {
 		c.Set(config.PythonPath, input.PythonPath)
+	}
+
+	if input.TranscodeInputArgs != nil {
+		c.Set(config.TranscodeInputArgs, input.TranscodeInputArgs)
+	}
+	if input.TranscodeOutputArgs != nil {
+		c.Set(config.TranscodeOutputArgs, input.TranscodeOutputArgs)
+	}
+	if input.LiveTranscodeInputArgs != nil {
+		c.Set(config.LiveTranscodeInputArgs, input.LiveTranscodeInputArgs)
+	}
+	if input.LiveTranscodeOutputArgs != nil {
+		c.Set(config.LiveTranscodeOutputArgs, input.LiveTranscodeOutputArgs)
 	}
 
 	if err := c.Write(); err != nil {
@@ -356,6 +391,18 @@ func (r *mutationResolver) ConfigureInterface(ctx context.Context, input ConfigI
 
 	setBool(config.CSSEnabled, input.CSSEnabled)
 
+	if input.Javascript != nil {
+		c.SetJavascript(*input.Javascript)
+	}
+
+	setBool(config.JavascriptEnabled, input.JavascriptEnabled)
+
+	if input.CustomLocales != nil {
+		c.SetCustomLocales(*input.CustomLocales)
+	}
+
+	setBool(config.CustomLocalesEnabled, input.CustomLocalesEnabled)
+
 	if input.DisableDropdownCreate != nil {
 		ddc := input.DisableDropdownCreate
 		setBool(config.DisableDropdownCreatePerformer, ddc.Performer)
@@ -430,6 +477,12 @@ func (r *mutationResolver) ConfigureScraping(ctx context.Context, input ConfigSc
 	}
 
 	if input.ExcludeTagPatterns != nil {
+		for _, r := range input.ExcludeTagPatterns {
+			_, err := regexp.Compile(r)
+			if err != nil {
+				return makeConfigScrapingResult(), fmt.Errorf("tag exclusion pattern '%v' invalid: %w", r, err)
+			}
+		}
 		c.Set(config.ScraperExcludeTagPatterns, input.ExcludeTagPatterns)
 	}
 

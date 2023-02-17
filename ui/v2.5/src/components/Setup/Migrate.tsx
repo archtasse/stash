@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Button, Card, Container, Form } from "react-bootstrap";
 import { useIntl, FormattedMessage } from "react-intl";
+import { getBaseURL } from "src/core/createClient";
 import * as GQL from "src/core/generated-graphql";
 import { useSystemStatus, mutateMigrate } from "src/core/StashService";
 import { migrationNotes } from "src/docs/en/MigrationNotes";
-import { LoadingIndicator } from "../Shared";
+import { LoadingIndicator } from "../Shared/LoadingIndicator";
 import { MarkdownPage } from "../Shared/MarkdownPage";
 
 export const Migrate: React.FC = () => {
@@ -15,6 +16,12 @@ export const Migrate: React.FC = () => {
 
   const intl = useIntl();
 
+  // if database path includes path separators, then this is passed through
+  // to the migration path. Extract the base name of the database file.
+  const databasePath = systemStatus
+    ? systemStatus?.systemStatus.databasePath?.split(/[\\/]/).pop()
+    : "";
+
   // make suffix based on current time
   const now = new Date()
     .toISOString()
@@ -23,7 +30,7 @@ export const Migrate: React.FC = () => {
     .replace(/:/g, "")
     .replace(/\..*/, "");
   const defaultBackupPath = systemStatus
-    ? `${systemStatus.systemStatus.databasePath}.${systemStatus.systemStatus.databaseSchema}.${now}`
+    ? `${databasePath}.${systemStatus.systemStatus.databaseSchema}.${now}`
     : "";
 
   const discordLink = (
@@ -115,7 +122,7 @@ export const Migrate: React.FC = () => {
         backupPath: backupPath ?? "",
       });
 
-      const newURL = new URL("/", window.location.toString());
+      const newURL = new URL("", window.location.origin + getBaseURL());
       window.location.href = newURL.toString();
     } catch (e) {
       if (e instanceof Error) setMigrateError(e.message ?? e.toString());

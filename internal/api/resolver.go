@@ -95,8 +95,12 @@ func (r *Resolver) withTxn(ctx context.Context, fn func(ctx context.Context) err
 	return txn.WithTxn(ctx, r.txnManager, fn)
 }
 
+func (r *Resolver) withReadTxn(ctx context.Context, fn func(ctx context.Context) error) error {
+	return txn.WithReadTxn(ctx, r.txnManager, fn)
+}
+
 func (r *queryResolver) MarkerWall(ctx context.Context, q *string) (ret []*models.SceneMarker, err error) {
-	if err := r.withTxn(ctx, func(ctx context.Context) error {
+	if err := r.withReadTxn(ctx, func(ctx context.Context) error {
 		ret, err = r.repository.SceneMarker.Wall(ctx, q)
 		return err
 	}); err != nil {
@@ -106,7 +110,7 @@ func (r *queryResolver) MarkerWall(ctx context.Context, q *string) (ret []*model
 }
 
 func (r *queryResolver) SceneWall(ctx context.Context, q *string) (ret []*models.Scene, err error) {
-	if err := r.withTxn(ctx, func(ctx context.Context) error {
+	if err := r.withReadTxn(ctx, func(ctx context.Context) error {
 		ret, err = r.repository.Scene.Wall(ctx, q)
 		return err
 	}); err != nil {
@@ -117,7 +121,7 @@ func (r *queryResolver) SceneWall(ctx context.Context, q *string) (ret []*models
 }
 
 func (r *queryResolver) MarkerStrings(ctx context.Context, q *string, sort *string) (ret []*models.MarkerStringsResultType, err error) {
-	if err := r.withTxn(ctx, func(ctx context.Context) error {
+	if err := r.withReadTxn(ctx, func(ctx context.Context) error {
 		ret, err = r.repository.SceneMarker.GetMarkerStrings(ctx, q, sort)
 		return err
 	}); err != nil {
@@ -129,7 +133,7 @@ func (r *queryResolver) MarkerStrings(ctx context.Context, q *string, sort *stri
 
 func (r *queryResolver) Stats(ctx context.Context) (*StatsResultType, error) {
 	var ret StatsResultType
-	if err := r.withTxn(ctx, func(ctx context.Context) error {
+	if err := r.withReadTxn(ctx, func(ctx context.Context) error {
 		repo := r.repository
 		scenesQB := repo.Scene
 		imageQB := repo.Image
@@ -180,19 +184,22 @@ func (r *queryResolver) Version(ctx context.Context) (*Version, error) {
 	}, nil
 }
 
-// Latestversion returns the latest git shorthash commit.
-func (r *queryResolver) Latestversion(ctx context.Context) (*ShortVersion, error) {
-	ver, url, err := GetLatestVersion(ctx, true)
-	if err == nil {
-		logger.Infof("Retrieved latest hash: %s", ver)
-	} else {
-		logger.Errorf("Error while retrieving latest hash: %s", err)
+func (r *queryResolver) Latestversion(ctx context.Context) (*LatestVersion, error) {
+	latestRelease, err := GetLatestRelease(ctx)
+	if err != nil {
+		if !errors.Is(err, context.Canceled) {
+			logger.Errorf("Error while retrieving latest version: %v", err)
+		}
+		return nil, err
 	}
+	logger.Infof("Retrieved latest version: %s (%s)", latestRelease.Version, latestRelease.ShortHash)
 
-	return &ShortVersion{
-		Shorthash: ver,
-		URL:       url,
-	}, err
+	return &LatestVersion{
+		Version:     latestRelease.Version,
+		Shorthash:   latestRelease.ShortHash,
+		ReleaseDate: latestRelease.Date,
+		URL:         latestRelease.Url,
+	}, nil
 }
 
 // Get scene marker tags which show up under the video.
@@ -205,7 +212,7 @@ func (r *queryResolver) SceneMarkerTags(ctx context.Context, scene_id string) ([
 	var keys []int
 	tags := make(map[int]*SceneMarkerTag)
 
-	if err := r.withTxn(ctx, func(ctx context.Context) error {
+	if err := r.withReadTxn(ctx, func(ctx context.Context) error {
 		sceneMarkers, err := r.repository.SceneMarker.FindBySceneID(ctx, sceneID)
 		if err != nil {
 			return err

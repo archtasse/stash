@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
+	"path/filepath"
 
 	"github.com/stashapp/stash/pkg/job"
 	"github.com/stashapp/stash/pkg/logger"
@@ -109,7 +111,7 @@ func (j *cleanJob) execute(ctx context.Context) error {
 		folderCount int
 	)
 
-	if err := txn.WithTxn(ctx, j.Repository, func(ctx context.Context) error {
+	if err := txn.WithReadTxn(ctx, j.Repository, func(ctx context.Context) error {
 		var err error
 		fileCount, err = j.Repository.CountAllInPaths(ctx, j.options.Paths)
 		if err != nil {
@@ -169,7 +171,7 @@ func (j *cleanJob) assessFiles(ctx context.Context, toDelete *deleteSet) error {
 	progress := j.progress
 
 	more := true
-	if err := txn.WithTxn(ctx, j.Repository, func(ctx context.Context) error {
+	if err := txn.WithReadTxn(ctx, j.Repository, func(ctx context.Context) error {
 		for more {
 			if job.IsCancelled(ctx) {
 				return nil
@@ -253,7 +255,7 @@ func (j *cleanJob) assessFolders(ctx context.Context, toDelete *deleteSet) error
 	progress := j.progress
 
 	more := true
-	if err := txn.WithTxn(ctx, j.Repository, func(ctx context.Context) error {
+	if err := txn.WithReadTxn(ctx, j.Repository, func(ctx context.Context) error {
 		for more {
 			if job.IsCancelled(ctx) {
 				return nil
@@ -338,7 +340,9 @@ func (j *cleanJob) shouldCleanFolder(ctx context.Context, f *Folder) bool {
 	path := f.Path
 
 	info, err := f.Info(j.FS)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+	// ErrInvalid can occur in zip files where the zip file path changed
+	// and the underlying folder did not
+	if err != nil && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, fs.ErrInvalid) {
 		logger.Errorf("error getting folder info for %q, not cleaning: %v", path, err)
 		return false
 	}
@@ -347,6 +351,22 @@ func (j *cleanJob) shouldCleanFolder(ctx context.Context, f *Folder) bool {
 		// info is nil - file not exist
 		logger.Infof("Folder not found. Marking to clean: \"%s\"", path)
 		return true
+	}
+
+	// #3261 - handle symlinks
+	if info.Mode()&os.ModeSymlink == os.ModeSymlink {
+		finalPath, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			// don't bail out if symlink is invalid
+			logger.Infof("Invalid symlink. Marking to clean: \"%s\"", path)
+			return true
+		}
+
+		info, err = j.FS.Lstat(finalPath)
+		if err != nil {
+			logger.Errorf("error getting file info for %q (-> %s), not cleaning: %v", path, finalPath, err)
+			return false
+		}
 	}
 
 	// run through path filter, if returns false then the file should be cleaned

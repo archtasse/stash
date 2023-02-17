@@ -85,6 +85,7 @@ func makeConfigGeneralResult() *ConfigGeneralResult {
 	return &ConfigGeneralResult{
 		Stashes:                      config.GetStashPaths(),
 		DatabasePath:                 config.GetDatabasePath(),
+		BackupDirectoryPath:          config.GetBackupDirectoryPath(),
 		GeneratedPath:                config.GetGeneratedPath(),
 		MetadataPath:                 config.GetMetadataPath(),
 		ConfigFilePath:               config.GetConfigFile(),
@@ -122,6 +123,10 @@ func makeConfigGeneralResult() *ConfigGeneralResult {
 		ScraperCDPPath:               &scraperCDPPath,
 		StashBoxes:                   config.GetStashBoxes(),
 		PythonPath:                   config.GetPythonPath(),
+		TranscodeInputArgs:           config.GetTranscodeInputArgs(),
+		TranscodeOutputArgs:          config.GetTranscodeOutputArgs(),
+		LiveTranscodeInputArgs:       config.GetLiveTranscodeInputArgs(),
+		LiveTranscodeOutputArgs:      config.GetLiveTranscodeOutputArgs(),
 	}
 }
 
@@ -141,11 +146,14 @@ func makeConfigInterfaceResult() *ConfigInterfaceResult {
 	showStudioAsText := config.GetShowStudioAsText()
 	css := config.GetCSS()
 	cssEnabled := config.GetCSSEnabled()
+	javascript := config.GetJavascript()
+	javascriptEnabled := config.GetJavascriptEnabled()
+	customLocales := config.GetCustomLocales()
+	customLocalesEnabled := config.GetCustomLocalesEnabled()
 	language := config.GetLanguage()
 	handyKey := config.GetHandyKey()
 	scriptOffset := config.GetFunscriptOffset()
 	imageLightboxOptions := config.GetImageLightboxOptions()
-
 	// FIXME - misnamed output field means we have redundant fields
 	disableDropdownCreate := config.GetDisableDropdownCreate()
 
@@ -164,6 +172,10 @@ func makeConfigInterfaceResult() *ConfigInterfaceResult {
 		ContinuePlaylistDefault:      &continuePlaylistDefault,
 		CSS:                          &css,
 		CSSEnabled:                   &cssEnabled,
+		Javascript:                   &javascript,
+		JavascriptEnabled:            &javascriptEnabled,
+		CustomLocales:                &customLocales,
+		CustomLocalesEnabled:         &customLocalesEnabled,
 		Language:                     &language,
 
 		ImageLightbox: &imageLightboxOptions,

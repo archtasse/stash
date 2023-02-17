@@ -7,9 +7,12 @@ import (
 	"time"
 
 	"github.com/stashapp/stash/pkg/file"
+	"github.com/stashapp/stash/pkg/file/video"
 	"github.com/stashapp/stash/pkg/logger"
 	"github.com/stashapp/stash/pkg/models"
+	"github.com/stashapp/stash/pkg/models/paths"
 	"github.com/stashapp/stash/pkg/plugin"
+	"github.com/stashapp/stash/pkg/txn"
 )
 
 var (
@@ -19,7 +22,7 @@ var (
 type CreatorUpdater interface {
 	FindByFileID(ctx context.Context, fileID file.ID) ([]*models.Scene, error)
 	FindByFingerprints(ctx context.Context, fp []file.Fingerprint) ([]*models.Scene, error)
-	Create(ctx context.Context, newScene *models.Scene, fileIDs []file.ID) error
+	Creator
 	UpdatePartial(ctx context.Context, id int, updatedScene models.ScenePartial) (*models.Scene, error)
 	AddFileID(ctx context.Context, id int, fileID file.ID) error
 	models.VideoFileLoader
@@ -34,7 +37,11 @@ type ScanHandler struct {
 
 	CoverGenerator CoverGenerator
 	ScanGenerator  ScanGenerator
+	CaptionUpdater video.CaptionUpdater
 	PluginCache    *plugin.Cache
+
+	FileNamingAlgorithm models.HashAlgorithm
+	Paths               *paths.Paths
 }
 
 func (h *ScanHandler) validate() error {
@@ -47,11 +54,20 @@ func (h *ScanHandler) validate() error {
 	if h.ScanGenerator == nil {
 		return errors.New("ScanGenerator is required")
 	}
+	if h.CaptionUpdater == nil {
+		return errors.New("CaptionUpdater is required")
+	}
+	if !h.FileNamingAlgorithm.IsValid() {
+		return errors.New("FileNamingAlgorithm is required")
+	}
+	if h.Paths == nil {
+		return errors.New("Paths is required")
+	}
 
 	return nil
 }
 
-func (h *ScanHandler) Handle(ctx context.Context, f file.File) error {
+func (h *ScanHandler) Handle(ctx context.Context, f file.File, oldFile file.File) error {
 	if err := h.validate(); err != nil {
 		return err
 	}
@@ -59,6 +75,12 @@ func (h *ScanHandler) Handle(ctx context.Context, f file.File) error {
 	videoFile, ok := f.(*file.VideoFile)
 	if !ok {
 		return ErrNotVideoFile
+	}
+
+	if oldFile != nil {
+		if err := video.CleanCaptions(ctx, videoFile, nil, h.CaptionUpdater); err != nil {
+			return fmt.Errorf("cleaning captions: %w", err)
+		}
 	}
 
 	// try to match the file to a scene
@@ -76,7 +98,8 @@ func (h *ScanHandler) Handle(ctx context.Context, f file.File) error {
 	}
 
 	if len(existing) > 0 {
-		if err := h.associateExisting(ctx, existing, videoFile); err != nil {
+		updateExisting := oldFile != nil
+		if err := h.associateExisting(ctx, existing, videoFile, updateExisting); err != nil {
 			return err
 		}
 	} else {
@@ -93,27 +116,42 @@ func (h *ScanHandler) Handle(ctx context.Context, f file.File) error {
 			return fmt.Errorf("creating new scene: %w", err)
 		}
 
-		h.PluginCache.ExecutePostHooks(ctx, newScene.ID, plugin.SceneCreatePost, nil, nil)
+		h.PluginCache.RegisterPostHooks(ctx, newScene.ID, plugin.SceneCreatePost, nil, nil)
 
 		existing = []*models.Scene{newScene}
 	}
 
-	for _, s := range existing {
-		if err := h.CoverGenerator.GenerateCover(ctx, s, videoFile); err != nil {
-			// just log if cover generation fails. We can try again on rescan
-			logger.Errorf("Error generating cover for %s: %v", videoFile.Path, err)
-		}
+	if oldFile != nil {
+		// migrate hashes from the old file to the new
+		oldHash := GetHash(oldFile, h.FileNamingAlgorithm)
+		newHash := GetHash(f, h.FileNamingAlgorithm)
 
-		if err := h.ScanGenerator.Generate(ctx, s, videoFile); err != nil {
-			// just log if cover generation fails. We can try again on rescan
-			logger.Errorf("Error generating content for %s: %v", videoFile.Path, err)
+		if oldHash != "" && newHash != "" && oldHash != newHash {
+			MigrateHash(h.Paths, oldHash, newHash)
 		}
 	}
+
+	// do this after the commit so that cover generation doesn't hold up the transaction
+	txn.AddPostCommitHook(ctx, func(ctx context.Context) error {
+		for _, s := range existing {
+			if err := h.CoverGenerator.GenerateCover(ctx, s, videoFile); err != nil {
+				// just log if cover generation fails. We can try again on rescan
+				logger.Errorf("Error generating cover for %s: %v", videoFile.Path, err)
+			}
+
+			if err := h.ScanGenerator.Generate(ctx, s, videoFile); err != nil {
+				// just log if cover generation fails. We can try again on rescan
+				logger.Errorf("Error generating content for %s: %v", videoFile.Path, err)
+			}
+		}
+
+		return nil
+	})
 
 	return nil
 }
 
-func (h *ScanHandler) associateExisting(ctx context.Context, existing []*models.Scene, f *file.VideoFile) error {
+func (h *ScanHandler) associateExisting(ctx context.Context, existing []*models.Scene, f *file.VideoFile, updateExisting bool) error {
 	for _, s := range existing {
 		if err := s.LoadFiles(ctx, h.CreatorUpdater); err != nil {
 			return err
@@ -133,6 +171,15 @@ func (h *ScanHandler) associateExisting(ctx context.Context, existing []*models.
 			if err := h.CreatorUpdater.AddFileID(ctx, s.ID, f.ID); err != nil {
 				return fmt.Errorf("adding file to scene: %w", err)
 			}
+
+			// update updated_at time
+			if _, err := h.CreatorUpdater.UpdatePartial(ctx, s.ID, models.NewScenePartial()); err != nil {
+				return fmt.Errorf("updating scene: %w", err)
+			}
+		}
+
+		if !found || updateExisting {
+			h.PluginCache.RegisterPostHooks(ctx, s.ID, plugin.SceneUpdatePost, nil, nil)
 		}
 	}
 

@@ -54,6 +54,7 @@
     "import": "Importer…",
     "import_from_file": "Importer fra fil",
     "logout": "Log ud",
+    "make_primary": "Gør til primær",
     "merge": "Fusioner",
     "merge_from": "Fusioner fra",
     "merge_into": "Fusioner til",
@@ -66,6 +67,7 @@
     "play_selected": "Afspil valgte",
     "preview": "Forhåndsvisning",
     "previous_action": "Tilbage",
+    "reassign": "Gentildel",
     "refresh": "Opdater",
     "reload_plugins": "Genindlæs plugins",
     "reload_scrapers": "Genindlæs scrapers",
@@ -98,10 +100,12 @@
     "show": "Vis",
     "show_configuration": "Vis Konfiguration",
     "skip": "Spring over",
+    "split": "Opdel",
     "stop": "Stop",
     "submit": "Send",
     "submit_stash_box": "Send til Stash-Box",
     "submit_update": "Send opdatering",
+    "swap": "Ombyt",
     "tasks": {
       "clean_confirm_message": "Er du sikker på, at du vil Rense? Dette vil slette databaseinformation og genereret indhold for alle scener og gallerier, der ikke længere findes i filsystemet.",
       "dry_mode_selected": "Tør Tilstand valgt. Ingen egentlig sletning vil finde sted, kun logning.",
@@ -120,6 +124,7 @@
   "also_known_as": "Også kendt som",
   "ascending": "Stigende",
   "average_resolution": "Gennemsnitlig Opløsning",
+  "between_and": "og",
   "birth_year": "Fødselsår",
   "birthdate": "Fødselsdato",
   "bitrate": "Bithastighed",
@@ -189,6 +194,7 @@
     },
     "categories": {
       "about": "Om",
+      "changelog": "Ændringslog",
       "interface": "Interface",
       "logs": "Logfiler",
       "metadata_providers": "Metadataudbydere",
@@ -242,6 +248,10 @@
         "stash-box_integration": "Stash-box integration",
         "username": "Brugernavn",
         "username_desc": "Brugernavn for at få adgang til Stash. Lad tom for at deaktivere brugergodkendelse"
+      },
+      "backup_directory_path": {
+        "description": "Mappelokation for SQLite database backup filer",
+        "heading": "Backup mappesti"
       },
       "cache_location": "Directory placering af cachen",
       "cache_path_head": "Cache Sti",
@@ -344,7 +354,7 @@
       "auto_tagging": "Auto tagging",
       "backing_up_database": "Sikkerhedskopiering af database",
       "backup_and_download": "Udfører en sikkerhedskopi af databasen og downloader den resulterende fil.",
-      "backup_database": "Udfører en sikkerhedskopi af databasen til samme mappe som databasen med filnavnsformatet {filename_format}",
+      "backup_database": "Udfører en sikkerhedskopi af databasen til backup-mappen med filnavnsformatet {filename_format}",
       "cleanup_desc": "Tjek for manglende filer og fjern dem fra databasen. Dette er en destruktiv handling.",
       "data_management": "Datastyring",
       "defaults_set": "Standarder er blevet indstillet og vil blive brugt, når du klikker på knappen {action} på siden Opgaver.",
@@ -420,11 +430,24 @@
       "scene_tools": "Sceneværktøjer"
     },
     "ui": {
+      "abbreviate_counters": {
+        "description": "Forkort tællere i kort- og detaljebilleder, fx bliver \"1831\" forkortet til \"1.8K\".",
+        "heading": "Forkort tællere"
+      },
       "basic_settings": "Grundlæggende indstillinger",
       "custom_css": {
         "description": "Siden skal genindlæses for at ændringer kan træde i kraft.",
         "heading": "Brugerdefineret CSS",
         "option_label": "Brugerdefineret CSS aktiveret"
+      },
+      "custom_javascript": {
+        "description": "Siden skal genindlæses før ændringerne træder i kraft.",
+        "heading": "Brugerdefineret Javascript"
+      },
+      "custom_locales": {
+        "description": "Ændre individuelle lokale strenge. Se https://github.com/stashapp/stash/blob/develop/ui/v2.5/src/locales/en-GB.json for master-listen. Siden skal genindlæses for at aktivere ændringerne.",
+        "heading": "Egen oversættelse",
+        "option_label": "Egen oversættelse aktiveret"
       },
       "delete_options": {
         "description": "Standardindstillinger ved sletning af billeder, gallerier og scener.",
@@ -950,7 +973,7 @@
       "your_system_has_been_created": "Succes! Dit system er blevet oprettet!"
     },
     "welcome": {
-      "config_path_logic_explained": "Stash prøver først at finde sin konfigurationsfil (<code>config.yml</code>) fra den aktuelle arbejdsmappe, og hvis den ikke finder den der, falder den tilbage til <code>$HOME/.stash/config. yml</code> (på Windows vil dette være <code>%USERPROFILE%\\.stash\\config.yml</code>). Du kan også få Stash til at læse fra en specifik konfigurationsfil ved at køre den med <code>-c <sti til konfigurationsfil></code> eller <code>--config <sti til konfigurationsfil></code> muligheder.",
+      "config_path_logic_explained": "Stash prøver først at finde sin konfigurationsfil (<code>config.yml</code>) fra den aktuelle arbejdsmappe, og hvis den ikke finder den der, falder den tilbage til <code>$HOME/.stash/config. yml</code> (på Windows vil dette være <code>%USERPROFILE%\\.stash\\config.yml</code>). Du kan også få Stash til at læse fra en specifik konfigurationsfil ved at køre den med <code>-c '<sti til konfigurationsfil>'</code> eller <code>--config '<sti til konfigurationsfil>'</code> muligheder.",
       "in_current_stash_directory": "I mappen <code>$HOME/.stash</code>",
       "in_the_current_working_directory": "I den aktuelle arbejdsmappe",
       "next_step": "Med alt det ude af vejen, hvis du er klar til at fortsætte med at konfigurere et nyt system, skal du vælge, hvor du vil gemme din konfigurationsfil og klikke på Næste.",

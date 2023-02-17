@@ -18,24 +18,25 @@ func (ScrapedStudio) IsScrapedContent() {}
 // A performer from a scraping operation...
 type ScrapedPerformer struct {
 	// Set if performer matched
-	StoredID     *string       `json:"stored_id"`
-	Name         *string       `json:"name"`
-	Gender       *string       `json:"gender"`
-	URL          *string       `json:"url"`
-	Twitter      *string       `json:"twitter"`
-	Instagram    *string       `json:"instagram"`
-	Birthdate    *string       `json:"birthdate"`
-	Ethnicity    *string       `json:"ethnicity"`
-	Country      *string       `json:"country"`
-	EyeColor     *string       `json:"eye_color"`
-	Height       *string       `json:"height"`
-	Measurements *string       `json:"measurements"`
-	FakeTits     *string       `json:"fake_tits"`
-	CareerLength *string       `json:"career_length"`
-	Tattoos      *string       `json:"tattoos"`
-	Piercings    *string       `json:"piercings"`
-	Aliases      *string       `json:"aliases"`
-	Tags         []*ScrapedTag `json:"tags"`
+	StoredID       *string       `json:"stored_id"`
+	Name           *string       `json:"name"`
+	Disambiguation *string       `json:"disambiguation"`
+	Gender         *string       `json:"gender"`
+	URL            *string       `json:"url"`
+	Twitter        *string       `json:"twitter"`
+	Instagram      *string       `json:"instagram"`
+	Birthdate      *string       `json:"birthdate"`
+	Ethnicity      *string       `json:"ethnicity"`
+	Country        *string       `json:"country"`
+	EyeColor       *string       `json:"eye_color"`
+	Height         *string       `json:"height"`
+	Measurements   *string       `json:"measurements"`
+	FakeTits       *string       `json:"fake_tits"`
+	CareerLength   *string       `json:"career_length"`
+	Tattoos        *string       `json:"tattoos"`
+	Piercings      *string       `json:"piercings"`
+	Aliases        *string       `json:"aliases"`
+	Tags           []*ScrapedTag `json:"tags"`
 	// This should be a base64 encoded data URL
 	Image        *string  `json:"image"`
 	Images       []string `json:"images"`
@@ -79,7 +80,9 @@ func (ScrapedMovie) IsScrapedContent() {}
 type ScrapedItem struct {
 	ID              int             `db:"id" json:"id"`
 	Title           sql.NullString  `db:"title" json:"title"`
+	Code            sql.NullString  `db:"code" json:"code"`
 	Description     sql.NullString  `db:"description" json:"description"`
+	Director        sql.NullString  `db:"director" json:"director"`
 	URL             sql.NullString  `db:"url" json:"url"`
 	Date            SQLiteDate      `db:"date" json:"date"`
 	Rating          sql.NullString  `db:"rating" json:"rating"`

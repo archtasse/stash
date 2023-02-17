@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Button, Tabs, Tab, Badge, Col, Row } from "react-bootstrap";
+import { Button, Tabs, Tab, Col, Row } from "react-bootstrap";
 import { FormattedMessage, useIntl } from "react-intl";
 import { useParams, useHistory } from "react-router-dom";
 import { Helmet } from "react-helmet";
@@ -12,16 +12,17 @@ import {
   usePerformerDestroy,
   mutateMetadataAutoTag,
 } from "src/core/StashService";
-import {
-  CountryFlag,
-  DetailsEditNavbar,
-  ErrorMessage,
-  Icon,
-  LoadingIndicator,
-} from "src/components/Shared";
-import { useLightbox, useToast } from "src/hooks";
-import { TextUtils } from "src/utils";
-import { RatingStars } from "src/components/Scenes/SceneDetails/RatingStars";
+import { Counter } from "src/components/Shared/Counter";
+import { CountryFlag } from "src/components/Shared/CountryFlag";
+import { DetailsEditNavbar } from "src/components/Shared/DetailsEditNavbar";
+import { ErrorMessage } from "src/components/Shared/ErrorMessage";
+import { Icon } from "src/components/Shared/Icon";
+import { LoadingIndicator } from "src/components/Shared/LoadingIndicator";
+import { useLightbox } from "src/hooks/Lightbox/hooks";
+import { useToast } from "src/hooks/Toast";
+import { ConfigurationContext } from "src/hooks/Config";
+import TextUtils from "src/utils/text";
+import { RatingSystem } from "src/components/Shared/Rating/RatingSystem";
 import { PerformerDetailsPanel } from "./PerformerDetailsPanel";
 import { PerformerScenesPanel } from "./PerformerScenesPanel";
 import { PerformerGalleriesPanel } from "./PerformerGalleriesPanel";
@@ -30,12 +31,10 @@ import { PerformerImagesPanel } from "./PerformerImagesPanel";
 import { PerformerEditPanel } from "./PerformerEditPanel";
 import { PerformerSubmitButton } from "./PerformerSubmitButton";
 import GenderIcon from "../GenderIcon";
-import {
-  faCamera,
-  faDove,
-  faHeart,
-  faLink,
-} from "@fortawesome/free-solid-svg-icons";
+import { faHeart, faLink } from "@fortawesome/free-solid-svg-icons";
+import { faInstagram, faTwitter } from "@fortawesome/free-brands-svg-icons";
+import { IUIConfig } from "src/core/config";
+import { useRatingKeybinds } from "src/hooks/keybinds";
 
 interface IProps {
   performer: GQL.PerformerDataFragment;
@@ -49,6 +48,11 @@ const PerformerPage: React.FC<IProps> = ({ performer }) => {
   const history = useHistory();
   const intl = useIntl();
   const { tab = "details" } = useParams<IPerformerParams>();
+
+  // Configuration settings
+  const { configuration } = React.useContext(ConfigurationContext);
+  const abbreviateCounter =
+    (configuration?.ui as IUIConfig)?.abbreviateCounters ?? false;
 
   const [imagePreview, setImagePreview] = useState<string | null>();
   const [imageEncoding, setImageEncoding] = useState<boolean>(false);
@@ -102,6 +106,12 @@ const PerformerPage: React.FC<IProps> = ({ performer }) => {
     }
   }
 
+  useRatingKeybinds(
+    true,
+    configuration?.ui?.ratingSystemOptions?.type,
+    setRating
+  );
+
   // set up hotkeys
   useEffect(() => {
     Mousetrap.bind("a", () => setActiveTabKey("details"));
@@ -110,30 +120,6 @@ const PerformerPage: React.FC<IProps> = ({ performer }) => {
     Mousetrap.bind("g", () => setActiveTabKey("galleries"));
     Mousetrap.bind("m", () => setActiveTabKey("movies"));
     Mousetrap.bind("f", () => setFavorite(!performer.favorite));
-
-    // numeric keypresses get caught by jwplayer, so blur the element
-    // if the rating sequence is started
-    Mousetrap.bind("r", () => {
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur();
-      }
-
-      Mousetrap.bind("0", () => setRating(NaN));
-      Mousetrap.bind("1", () => setRating(1));
-      Mousetrap.bind("2", () => setRating(2));
-      Mousetrap.bind("3", () => setRating(3));
-      Mousetrap.bind("4", () => setRating(4));
-      Mousetrap.bind("5", () => setRating(5));
-
-      setTimeout(() => {
-        Mousetrap.unbind("0");
-        Mousetrap.unbind("1");
-        Mousetrap.unbind("2");
-        Mousetrap.unbind("3");
-        Mousetrap.unbind("4");
-        Mousetrap.unbind("5");
-      }, 1000);
-    });
 
     return () => {
       Mousetrap.unbind("a");
@@ -195,9 +181,10 @@ const PerformerPage: React.FC<IProps> = ({ performer }) => {
           title={
             <React.Fragment>
               {intl.formatMessage({ id: "scenes" })}
-              <Badge className="left-spacing" pill variant="secondary">
-                {intl.formatNumber(performer.scene_count ?? 0)}
-              </Badge>
+              <Counter
+                abbreviateCounter={abbreviateCounter}
+                count={performer.scene_count ?? 0}
+              />
             </React.Fragment>
           }
         >
@@ -208,9 +195,10 @@ const PerformerPage: React.FC<IProps> = ({ performer }) => {
           title={
             <React.Fragment>
               {intl.formatMessage({ id: "galleries" })}
-              <Badge className="left-spacing" pill variant="secondary">
-                {intl.formatNumber(performer.gallery_count ?? 0)}
-              </Badge>
+              <Counter
+                abbreviateCounter={abbreviateCounter}
+                count={performer.gallery_count ?? 0}
+              />
             </React.Fragment>
           }
         >
@@ -221,9 +209,10 @@ const PerformerPage: React.FC<IProps> = ({ performer }) => {
           title={
             <React.Fragment>
               {intl.formatMessage({ id: "images" })}
-              <Badge className="left-spacing" pill variant="secondary">
-                {intl.formatNumber(performer.image_count ?? 0)}
-              </Badge>
+              <Counter
+                abbreviateCounter={abbreviateCounter}
+                count={performer.image_count ?? 0}
+              />
             </React.Fragment>
           }
         >
@@ -234,9 +223,10 @@ const PerformerPage: React.FC<IProps> = ({ performer }) => {
           title={
             <React.Fragment>
               {intl.formatMessage({ id: "movies" })}
-              <Badge className="left-spacing" pill variant="secondary">
-                {intl.formatNumber(performer.movie_count ?? 0)}
-              </Badge>
+              <Counter
+                abbreviateCounter={abbreviateCounter}
+                count={performer.movie_count ?? 0}
+              />
             </React.Fragment>
           }
         >
@@ -252,7 +242,6 @@ const PerformerPage: React.FC<IProps> = ({ performer }) => {
         <PerformerEditPanel
           performer={performer}
           isVisible={isEditing}
-          isNew={false}
           onImageChange={onImageChange}
           onImageEncoding={onImageEncoding}
           onCancelEditing={() => {
@@ -284,13 +273,13 @@ const PerformerPage: React.FC<IProps> = ({ performer }) => {
   }
 
   function maybeRenderAliases() {
-    if (performer?.aliases) {
+    if (performer?.alias_list?.length) {
       return (
         <div>
           <span className="alias-head">
             <FormattedMessage id="also_known_as" />{" "}
           </span>
-          <span className="alias">{performer.aliases}</span>
+          <span className="alias">{performer.alias_list?.join(", ")}</span>
         </div>
       );
     }
@@ -315,7 +304,7 @@ const PerformerPage: React.FC<IProps> = ({ performer }) => {
         variables: {
           input: {
             id: performer.id,
-            rating: v,
+            rating100: v,
           },
         },
       });
@@ -356,7 +345,7 @@ const PerformerPage: React.FC<IProps> = ({ performer }) => {
             target="_blank"
             rel="noopener noreferrer"
           >
-            <Icon icon={faDove} />
+            <Icon icon={faTwitter} />
           </a>
         </Button>
       )}
@@ -371,7 +360,7 @@ const PerformerPage: React.FC<IProps> = ({ performer }) => {
             target="_blank"
             rel="noopener noreferrer"
           >
-            <Icon icon={faCamera} />
+            <Icon icon={faInstagram} />
           </a>
         </Button>
       )}
@@ -410,14 +399,19 @@ const PerformerPage: React.FC<IProps> = ({ performer }) => {
             <h2>
               <GenderIcon
                 gender={performer.gender}
-                className="gender-icon mr-2 flag-icon"
+                className="gender-icon mr-2 fi"
               />
               <CountryFlag country={performer.country} className="mr-2" />
-              {performer.name}
+              <span className="performer-name">{performer.name}</span>
+              {performer.disambiguation && (
+                <span className="performer-disambiguation">
+                  {` (${performer.disambiguation})`}
+                </span>
+              )}
               {renderClickableIcons()}
             </h2>
-            <RatingStars
-              value={performer.rating ?? undefined}
+            <RatingSystem
+              value={performer.rating100 ?? undefined}
               onSetRating={(value) => setRating(value ?? null)}
             />
             {maybeRenderAliases()}

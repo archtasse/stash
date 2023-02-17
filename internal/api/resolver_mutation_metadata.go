@@ -124,7 +124,13 @@ func (r *mutationResolver) BackupDatabase(ctx context.Context, input BackupDatab
 		backupPath = f.Name()
 		f.Close()
 	} else {
-		backupPath = database.DatabaseBackupPath()
+		backupDirectoryPath := mgr.Config.GetBackupDirectoryPathOrDefault()
+		if backupDirectoryPath != "" {
+			if err := fsutil.EnsureDir(backupDirectoryPath); err != nil {
+				return nil, fmt.Errorf("could not create backup directory %v: %w", backupDirectoryPath, err)
+			}
+		}
+		backupPath = database.DatabaseBackupPath(backupDirectoryPath)
 	}
 
 	err := database.Backup(backupPath)
@@ -141,11 +147,63 @@ func (r *mutationResolver) BackupDatabase(ctx context.Context, input BackupDatab
 
 		baseURL, _ := ctx.Value(BaseURLCtxKey).(string)
 
-		fn := filepath.Base(database.DatabaseBackupPath())
+		fn := filepath.Base(database.DatabaseBackupPath(""))
 		ret := baseURL + "/downloads/" + downloadHash + "/" + fn
 		return &ret, nil
 	} else {
 		logger.Infof("Successfully backed up database to: %s", backupPath)
+	}
+
+	return nil, nil
+}
+
+func (r *mutationResolver) AnonymiseDatabase(ctx context.Context, input AnonymiseDatabaseInput) (*string, error) {
+	// if download is true, then backup to temporary file and return a link
+	download := input.Download != nil && *input.Download
+	mgr := manager.GetInstance()
+	database := mgr.Database
+	var outPath string
+	if download {
+		if err := fsutil.EnsureDir(mgr.Paths.Generated.Downloads); err != nil {
+			return nil, fmt.Errorf("could not create backup directory %v: %w", mgr.Paths.Generated.Downloads, err)
+		}
+		f, err := os.CreateTemp(mgr.Paths.Generated.Downloads, "anonymous*.sqlite")
+		if err != nil {
+			return nil, err
+		}
+
+		outPath = f.Name()
+		f.Close()
+	} else {
+		backupDirectoryPath := mgr.Config.GetBackupDirectoryPathOrDefault()
+		if backupDirectoryPath != "" {
+			if err := fsutil.EnsureDir(backupDirectoryPath); err != nil {
+				return nil, fmt.Errorf("could not create backup directory %v: %w", backupDirectoryPath, err)
+			}
+		}
+		outPath = database.AnonymousDatabasePath(backupDirectoryPath)
+	}
+
+	err := database.Anonymise(outPath)
+	if err != nil {
+		logger.Errorf("Error anonymising database: %v", err)
+		return nil, err
+	}
+
+	if download {
+		downloadHash, err := mgr.DownloadStore.RegisterFile(outPath, "", false)
+		if err != nil {
+			return nil, fmt.Errorf("error registering file for download: %w", err)
+		}
+		logger.Debugf("Generated anonymised file %s with hash %s", outPath, downloadHash)
+
+		baseURL, _ := ctx.Value(BaseURLCtxKey).(string)
+
+		fn := filepath.Base(database.DatabaseBackupPath(""))
+		ret := baseURL + "/downloads/" + downloadHash + "/" + fn
+		return &ret, nil
+	} else {
+		logger.Infof("Successfully anonymised database to: %s", outPath)
 	}
 
 	return nil, nil

@@ -20,12 +20,37 @@ By default, scene videos do not automatically start when navigating to the scene
 
 The maximum loop duration option allows looping of shorter videos. Set this value to the maximum scene duration that scene videos should loop. Setting this to 0 disables this functionality.
 
+### Activity tracking
+
+The "Track Activity" option allows tracking of scene play count and duration, and sets the resume point when a scene video is not finished.
+
+The "Minimum Play Percent" gives the minimum proportion of a video that must be played before the play count of the scene is incremented.
+
+By default, when a scene has a resume point, the scene player will automatically seek to this point when the scene is played. Setting "Always start video from beginning" to true disables this behaviour.
+
 ## Custom CSS
 
-The stash UI can be customised using custom CSS. See [here](https://github.com/stashapp/stash/wiki/Custom-CSS-snippets) for a community-curated set of CSS snippets to customise your UI. 
+The stash UI can be customised using custom CSS. See [here](https://docs.stashapp.cc/user-interface-ui/custom-css-snippets) for a community-curated set of CSS snippets to customise your UI. 
 
-[Stash Plex Theme](https://github.com/stashapp/stash/wiki/Theme-Plex) is a community created theme inspired by the popular Plex interface.
+[Stash Plex Theme](https://docs.stashapp.cc/user-interface-ui/themes/plex) is a community created theme inspired by the popular Plex interface.
 
+## Custom Javascript
+
+Stash supports the injection of custom javascript to assist with theming or adding additional functionality. Be aware that bad Javascript could break the UI or worse.
+
+## Custom Locales
+
+The localisation strings can be customised. The master list of default (en-GB) locale strings can be found [here](https://github.com/stashapp/stash/blob/develop/ui/v2.5/src/locales/en-GB.json). The custom locale format is the same as this json file.
+
+For example, to override the `actions.add_directory` label (which is `Add Directory` by default), you would have the following in the custom locale:
+
+```
+{
+  "actions": {
+    "add_directory": "Some other description"
+  }
+}
+```
 
 ## Custom served folders
 

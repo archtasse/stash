@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/99designs/gqlgen/graphql/handler/lru"
 	"github.com/stashapp/stash/internal/manager/config"
 	"github.com/stashapp/stash/pkg/file"
 	"github.com/stashapp/stash/pkg/file/video"
@@ -20,6 +21,7 @@ import (
 	"github.com/stashapp/stash/pkg/models"
 	"github.com/stashapp/stash/pkg/scene"
 	"github.com/stashapp/stash/pkg/scene/generate"
+	"github.com/stashapp/stash/pkg/txn"
 )
 
 type scanner interface {
@@ -57,11 +59,13 @@ func (j *ScanJob) Execute(ctx context.Context, progress *job.Progress) {
 	}
 
 	j.scanner.Scan(ctx, getScanHandlers(j.input, taskQueue, progress), file.ScanOptions{
-		Paths:                  paths,
-		ScanFilters:            []file.PathFilter{newScanFilter(instance.Config, minModTime)},
-		ZipFileExtensions:      instance.Config.GetGalleryExtensions(),
-		ParallelTasks:          instance.Config.GetParallelTasksWithAutoDetection(),
-		HandlerRequiredFilters: []file.Filter{newHandlerRequiredFilter(instance.Config)},
+		Paths:             paths,
+		ScanFilters:       []file.PathFilter{newScanFilter(instance.Config, minModTime)},
+		ZipFileExtensions: instance.Config.GetGalleryExtensions(),
+		ParallelTasks:     instance.Config.GetParallelTasksWithAutoDetection(),
+		HandlerRequiredFilters: []file.Filter{
+			newHandlerRequiredFilter(instance.Config),
+		},
 	}, progress)
 
 	taskQueue.Close()
@@ -95,22 +99,43 @@ type fileCounter interface {
 	CountByFileID(ctx context.Context, fileID file.ID) (int, error)
 }
 
+type galleryFinder interface {
+	fileCounter
+	FindByFolderID(ctx context.Context, folderID file.FolderID) ([]*models.Gallery, error)
+}
+
+type sceneFinder interface {
+	fileCounter
+	FindByPrimaryFileID(ctx context.Context, fileID file.ID) ([]*models.Scene, error)
+}
+
 // handlerRequiredFilter returns true if a File's handler needs to be executed despite the file not being updated.
 type handlerRequiredFilter struct {
 	extensionConfig
-	SceneFinder   fileCounter
-	ImageFinder   fileCounter
-	GalleryFinder fileCounter
+	txnManager     txn.Manager
+	SceneFinder    sceneFinder
+	ImageFinder    fileCounter
+	GalleryFinder  galleryFinder
+	CaptionUpdater video.CaptionUpdater
+
+	FolderCache *lru.LRU
+
+	videoFileNamingAlgorithm models.HashAlgorithm
 }
 
 func newHandlerRequiredFilter(c *config.Instance) *handlerRequiredFilter {
 	db := instance.Database
+	processes := c.GetParallelTasksWithAutoDetection()
 
 	return &handlerRequiredFilter{
-		extensionConfig: newExtensionConfig(c),
-		SceneFinder:     db.Scene,
-		ImageFinder:     db.Image,
-		GalleryFinder:   db.Gallery,
+		extensionConfig:          newExtensionConfig(c),
+		txnManager:               db,
+		SceneFinder:              db.Scene,
+		ImageFinder:              db.Image,
+		GalleryFinder:            db.Gallery,
+		CaptionUpdater:           db.File,
+		FolderCache:              lru.New(processes * 2),
+		videoFileNamingAlgorithm: c.GetVideoFileNamingAlgorithm(),
 	}
 }
 
@@ -143,7 +168,60 @@ func (f *handlerRequiredFilter) Accept(ctx context.Context, ff file.File) bool {
 	}
 
 	// execute handler if there are no related objects
-	return n == 0
+	if n == 0 {
+		return true
+	}
+
+	// if create galleries from folder is enabled and the file is not in a zip
+	// file, then check if there is a folder-based gallery for the file's
+	// directory
+	if isImageFile && instance.Config.GetCreateGalleriesFromFolders() && ff.Base().ZipFileID == nil {
+		// only do this for the first time it encounters the folder
+		// the first instance should create the gallery
+		_, found := f.FolderCache.Get(ctx, ff.Base().ParentFolderID.String())
+		if found {
+			// should already be handled
+			return false
+		}
+
+		g, _ := f.GalleryFinder.FindByFolderID(ctx, ff.Base().ParentFolderID)
+		f.FolderCache.Add(ctx, ff.Base().ParentFolderID.String(), true)
+
+		if len(g) == 0 {
+			// no folder gallery. Return true so that it creates one.
+			return true
+		}
+	}
+
+	if isVideoFile {
+		// check if the screenshot file exists
+		hash := scene.GetHash(ff, f.videoFileNamingAlgorithm)
+		ssPath := instance.Paths.Scene.GetScreenshotPath(hash)
+		if exists, _ := fsutil.FileExists(ssPath); !exists {
+			// if not, check if the file is a primary file for a scene
+			scenes, err := f.SceneFinder.FindByPrimaryFileID(ctx, ff.Base().ID)
+			if err != nil {
+				// just ignore
+				return false
+			}
+
+			if len(scenes) > 0 {
+				// if it is, then it needs to be re-generated
+				return true
+			}
+		}
+
+		// clean captions - scene handler handles this as well, but
+		// unchanged files aren't processed by the scene handler
+		videoFile, _ := ff.(*file.VideoFile)
+		if videoFile != nil {
+			if err := video.CleanCaptions(ctx, videoFile, f.txnManager, f.CaptionUpdater); err != nil {
+				logger.Errorf("Error cleaning captions: %v", err)
+			}
+		}
+	}
+
+	return false
 }
 
 type scanFilter struct {
@@ -190,6 +268,7 @@ func (f *scanFilter) Accept(ctx context.Context, path string, info fs.FileInfo) 
 	}
 
 	if !info.IsDir() && !isVideoFile && !isImageFile && !isZipFile {
+		logger.Debugf("Skipping %s as it does not match any known file extensions", path)
 		return false
 	}
 
@@ -202,6 +281,7 @@ func (f *scanFilter) Accept(ctx context.Context, path string, info fs.FileInfo) 
 	s := getStashFromDirPath(f.stashPaths, path)
 
 	if s == nil {
+		logger.Debugf("Skipping %s as it is not in the stash library", path)
 		return false
 	}
 
@@ -209,12 +289,15 @@ func (f *scanFilter) Accept(ctx context.Context, path string, info fs.FileInfo) 
 	// add a trailing separator so that it correctly matches against patterns like path/.*
 	pathExcludeTest := path + string(filepath.Separator)
 	if (s.ExcludeVideo || matchFileRegex(pathExcludeTest, f.videoExcludeRegex)) && (s.ExcludeImage || matchFileRegex(pathExcludeTest, f.imageExcludeRegex)) {
+		logger.Debugf("Skipping directory %s as it matches video and image exclusion patterns", path)
 		return false
 	}
 
 	if isVideoFile && (s.ExcludeVideo || matchFileRegex(path, f.videoExcludeRegex)) {
+		logger.Debugf("Skipping %s as it matches video exclusion patterns", path)
 		return false
-	} else if (isImageFile || isZipFile) && s.ExcludeImage || matchFileRegex(path, f.imageExcludeRegex) {
+	} else if (isImageFile || isZipFile) && (s.ExcludeImage || matchFileRegex(path, f.imageExcludeRegex)) {
+		logger.Debugf("Skipping %s as it matches image exclusion patterns", path)
 		return false
 	}
 
@@ -248,6 +331,7 @@ func getScanHandlers(options ScanMetadataInput, taskQueue *job.TaskQueue, progre
 					isGenerateThumbnails: options.ScanGenerateThumbnails,
 				},
 				PluginCache: pluginCache,
+				Paths:       instance.Paths,
 			},
 		},
 		&file.FilteredHandler{
@@ -255,6 +339,7 @@ func getScanHandlers(options ScanMetadataInput, taskQueue *job.TaskQueue, progre
 			Handler: &gallery.ScanHandler{
 				CreatorUpdater:     db.Gallery,
 				SceneFinderUpdater: db.Scene,
+				ImageFinderUpdater: db.Image,
 				PluginCache:        pluginCache,
 			},
 		},
@@ -263,12 +348,15 @@ func getScanHandlers(options ScanMetadataInput, taskQueue *job.TaskQueue, progre
 			Handler: &scene.ScanHandler{
 				CreatorUpdater: db.Scene,
 				PluginCache:    pluginCache,
+				CaptionUpdater: db.File,
 				CoverGenerator: &coverGenerator{},
 				ScanGenerator: &sceneGenerators{
 					input:     options,
 					taskQueue: taskQueue,
 					progress:  progress,
 				},
+				FileNamingAlgorithm: instance.Config.GetVideoFileNamingAlgorithm(),
+				Paths:               instance.Paths,
 			},
 		},
 	}
@@ -357,11 +445,12 @@ func (g *sceneGenerators) Generate(ctx context.Context, s *models.Scene, f *file
 			options := getGeneratePreviewOptions(GeneratePreviewOptionsInput{})
 
 			g := &generate.Generator{
-				Encoder:     instance.FFMPEG,
-				LockManager: instance.ReadLockManager,
-				MarkerPaths: instance.Paths.SceneMarkers,
-				ScenePaths:  instance.Paths.Scene,
-				Overwrite:   overwrite,
+				Encoder:      instance.FFMPEG,
+				FFMpegConfig: instance.Config,
+				LockManager:  instance.ReadLockManager,
+				MarkerPaths:  instance.Paths.SceneMarkers,
+				ScenePaths:   instance.Paths.Scene,
+				Overwrite:    overwrite,
 			}
 
 			taskPreview := GeneratePreviewTask{

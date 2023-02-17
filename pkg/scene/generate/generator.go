@@ -47,12 +47,18 @@ type ScenePaths interface {
 	GetTranscodePath(checksum string) string
 }
 
+type FFMpegConfig interface {
+	GetTranscodeInputArgs() []string
+	GetTranscodeOutputArgs() []string
+}
+
 type Generator struct {
-	Encoder     ffmpeg.FFMpeg
-	LockManager *fsutil.ReadLockManager
-	MarkerPaths MarkerPaths
-	ScenePaths  ScenePaths
-	Overwrite   bool
+	Encoder      ffmpeg.FFMpeg
+	FFMpegConfig FFMpegConfig
+	LockManager  *fsutil.ReadLockManager
+	MarkerPaths  MarkerPaths
+	ScenePaths   ScenePaths
+	Overwrite    bool
 }
 
 type generateFn func(lockCtx *fsutil.LockContext, tmpFn string) error
@@ -81,6 +87,16 @@ func (g Generator) generateFile(lockCtx *fsutil.LockContext, p Paths, pattern st
 
 	if err := generateFn(lockCtx, tmpFn); err != nil {
 		return err
+	}
+
+	// check if generated empty file
+	stat, err := os.Stat(tmpFn)
+	if err != nil {
+		return fmt.Errorf("error getting file stat: %w", err)
+	}
+
+	if stat.Size() == 0 {
+		return fmt.Errorf("ffmpeg command produced no output")
 	}
 
 	if err := fsutil.SafeMove(tmpFn, output); err != nil {
@@ -140,6 +156,10 @@ func (g Generator) generateOutput(lockCtx *fsutil.LockContext, args []string) ([
 			err = exitErr
 		}
 		return nil, fmt.Errorf("error running ffmpeg command <%s>: %w", strings.Join(args, " "), err)
+	}
+
+	if stdout.Len() == 0 {
+		return nil, fmt.Errorf("ffmpeg command produced no output: <%s>", strings.Join(args, " "))
 	}
 
 	return stdout.Bytes(), nil

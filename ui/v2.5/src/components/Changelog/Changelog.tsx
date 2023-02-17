@@ -1,5 +1,5 @@
 import React from "react";
-import { useChangelogStorage } from "src/hooks";
+import { useChangelogStorage } from "src/hooks/LocalForage";
 import Version from "./Version";
 import V010 from "src/docs/en/Changelog/v010.md";
 import V011 from "src/docs/en/Changelog/v011.md";
@@ -22,10 +22,9 @@ import V0150 from "src/docs/en/Changelog/v0150.md";
 import V0160 from "src/docs/en/Changelog/v0160.md";
 import V0161 from "src/docs/en/Changelog/v0161.md";
 import V0170 from "src/docs/en/Changelog/v0170.md";
+import V0180 from "src/docs/en/Changelog/v0180.md";
+import V0190 from "src/docs/en/Changelog/v0190.md";
 import { MarkdownPage } from "../Shared/MarkdownPage";
-
-// to avoid use of explicit any
-type Module = typeof V010;
 
 const Changelog: React.FC = () => {
   const [{ data, loading }, setOpenState] = useChangelogStorage();
@@ -53,16 +52,16 @@ const Changelog: React.FC = () => {
   interface IStashRelease {
     version: string;
     date?: string;
-    page: Module;
+    page: string;
     defaultOpen?: boolean;
   }
 
   // after new release:
   // add entry to releases, using the current* fields
   // then update the current fields.
-  const currentVersion = stashVersion || "v0.17.0";
+  const currentVersion = stashVersion || "v0.19.0";
   const currentDate = buildDate;
-  const currentPage = V0170;
+  const currentPage = V0190;
 
   const releases: IStashRelease[] = [
     {
@@ -70,6 +69,16 @@ const Changelog: React.FC = () => {
       date: currentDate,
       page: currentPage,
       defaultOpen: true,
+    },
+    {
+      version: "v0.18.0",
+      date: "2022-11-30",
+      page: V0180,
+    },
+    {
+      version: "v0.17.2",
+      date: "2022-10-25",
+      page: V0170,
     },
     {
       version: "v0.16.1",

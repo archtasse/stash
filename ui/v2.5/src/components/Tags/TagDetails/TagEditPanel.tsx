@@ -2,20 +2,20 @@ import React, { useEffect } from "react";
 import { FormattedMessage, useIntl } from "react-intl";
 import * as GQL from "src/core/generated-graphql";
 import * as yup from "yup";
-import { DetailsEditNavbar, TagSelect } from "src/components/Shared";
+import { DetailsEditNavbar } from "src/components/Shared/DetailsEditNavbar";
+import { TagSelect } from "src/components/Shared/Select";
 import { Form, Col, Row } from "react-bootstrap";
-import { FormUtils, ImageUtils } from "src/utils";
+import FormUtils from "src/utils/form";
+import ImageUtils from "src/utils/image";
 import { useFormik } from "formik";
-import { Prompt, useHistory } from "react-router-dom";
+import { Prompt } from "react-router-dom";
 import Mousetrap from "mousetrap";
 import { StringListInput } from "src/components/Shared/StringListInput";
 
 interface ITagEditPanel {
-  tag?: Partial<GQL.TagDataFragment>;
+  tag: Partial<GQL.TagDataFragment>;
   // returns id
-  onSubmit: (
-    tag: Partial<GQL.TagCreateInput | GQL.TagUpdateInput>
-  ) => Promise<string | undefined>;
+  onSubmit: (tag: Partial<GQL.TagCreateInput | GQL.TagUpdateInput>) => void;
   onCancel: () => void;
   onDelete: () => void;
   setImage: (image?: string | null) => void;
@@ -29,9 +29,8 @@ export const TagEditPanel: React.FC<ITagEditPanel> = ({
   setImage,
 }) => {
   const intl = useIntl();
-  const history = useHistory();
 
-  const isNew = tag === undefined;
+  const isNew = tag.id === undefined;
 
   const labelXS = 3;
   const labelXL = 3;
@@ -40,6 +39,7 @@ export const TagEditPanel: React.FC<ITagEditPanel> = ({
 
   const schema = yup.object({
     name: yup.string().required(),
+    description: yup.string().optional().nullable(),
     aliases: yup
       .array(yup.string().required())
       .optional()
@@ -58,6 +58,7 @@ export const TagEditPanel: React.FC<ITagEditPanel> = ({
 
   const initialValues = {
     name: tag?.name,
+    description: tag?.description,
     aliases: tag?.aliases,
     parent_ids: (tag?.parents ?? []).map((t) => t.id),
     child_ids: (tag?.children ?? []).map((t) => t.id),
@@ -70,15 +71,12 @@ export const TagEditPanel: React.FC<ITagEditPanel> = ({
     initialValues,
     validationSchema: schema,
     enableReinitialize: true,
-    onSubmit: doSubmit,
+    onSubmit: (values) => onSubmit(getTagInput(values)),
   });
 
-  async function doSubmit(values: InputValues) {
-    const id = await onSubmit(getTagInput(values));
-    if (id) {
-      formik.resetForm({ values });
-      history.push(`/tags/${id}`);
-    }
+  // always dirty if creating a new tag with a name
+  if (isNew && tag?.name) {
+    formik.dirty = true;
   }
 
   // set up hotkeys
@@ -121,8 +119,8 @@ export const TagEditPanel: React.FC<ITagEditPanel> = ({
 
       <Prompt
         when={formik.dirty}
-        message={(location) => {
-          if (!isNew && location.pathname.startsWith(`/tags/${tag?.id}`)) {
+        message={(location, action) => {
+          if (action === "PUSH" && location.pathname.startsWith(`/tags/`)) {
             return true;
           }
           return intl.formatMessage({ id: "dialogs.unsaved_changes" });
@@ -156,6 +154,20 @@ export const TagEditPanel: React.FC<ITagEditPanel> = ({
               value={formik.values.aliases ?? []}
               setValue={(value) => formik.setFieldValue("aliases", value)}
               errors={formik.errors.aliases}
+            />
+          </Col>
+        </Form.Group>
+
+        <Form.Group controlId="description" as={Row}>
+          {FormUtils.renderLabel({
+            title: intl.formatMessage({ id: "description" }),
+          })}
+          <Col xs={9}>
+            <Form.Control
+              as="textarea"
+              className="text-input"
+              placeholder={intl.formatMessage({ id: "description" })}
+              {...formik.getFieldProps("description")}
             />
           </Col>
         </Form.Group>
@@ -237,6 +249,7 @@ export const TagEditPanel: React.FC<ITagEditPanel> = ({
         isEditing={isEditing}
         onToggleEdit={onCancel}
         onSave={() => formik.handleSubmit()}
+        saveDisabled={!formik.dirty}
         onImageChange={onImageChange}
         onImageChangeURL={setImage}
         onClearImage={() => {

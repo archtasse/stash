@@ -169,6 +169,9 @@ func initialize() error {
 
 	db := sqlite.NewDatabase()
 
+	// start with empty paths
+	emptyPaths := paths.Paths{}
+
 	instance = &Manager{
 		Config:          cfg,
 		Logger:          l,
@@ -178,14 +181,18 @@ func initialize() error {
 
 		Database:   db,
 		Repository: sqliteRepository(db),
+		Paths:      &emptyPaths,
 
 		scanSubs: &subscriptionManager{},
 	}
 
 	instance.SceneService = &scene.Service{
-		File:            db.File,
-		Repository:      db.Scene,
-		MarkerDestroyer: instance.Repository.SceneMarker,
+		File:             db.File,
+		Repository:       db.Scene,
+		MarkerRepository: instance.Repository.SceneMarker,
+		PluginCache:      instance.PluginCache,
+		Paths:            instance.Paths,
+		Config:           cfg,
 	}
 
 	instance.ImageService = &image.Service{
@@ -285,9 +292,10 @@ type coverGenerator struct {
 
 func (g *coverGenerator) GenerateCover(ctx context.Context, scene *models.Scene, f *file.VideoFile) error {
 	gg := generate.Generator{
-		Encoder:     instance.FFMPEG,
-		LockManager: instance.ReadLockManager,
-		ScenePaths:  instance.Paths.Scene,
+		Encoder:      instance.FFMPEG,
+		FFMpegConfig: instance.Config,
+		LockManager:  instance.ReadLockManager,
+		ScenePaths:   instance.Paths.Scene,
 	}
 
 	return gg.Screenshot(ctx, f.Path, scene.GetHash(instance.Config.GetVideoFileNamingAlgorithm()), f.Width, f.Duration, generate.ScreenshotOptions{})
@@ -444,7 +452,7 @@ func (s *Manager) PostInit(ctx context.Context) error {
 		logger.Warnf("could not set initial configuration: %v", err)
 	}
 
-	s.Paths = paths.NewPaths(s.Config.GetGeneratedPath())
+	*s.Paths = paths.NewPaths(s.Config.GetGeneratedPath())
 	s.RefreshConfig()
 	s.SessionStore = session.NewStore(s.Config)
 	s.PluginCache.RegisterSessionStore(s.SessionStore)
@@ -484,8 +492,12 @@ func (s *Manager) PostInit(ctx context.Context) error {
 		return err
 	}
 
-	if database.Ready() == nil {
-		s.PostMigrate(ctx)
+	// Set the proxy if defined in config
+	if s.Config.GetProxy() != "" {
+		os.Setenv("HTTP_PROXY", s.Config.GetProxy())
+		os.Setenv("HTTPS_PROXY", s.Config.GetProxy())
+		os.Setenv("NO_PROXY", s.Config.GetNoProxy())
+		logger.Info("Using HTTP Proxy")
 	}
 
 	return nil
@@ -522,7 +534,7 @@ func (s *Manager) initScraperCache() *scraper.Cache {
 }
 
 func (s *Manager) RefreshConfig() {
-	s.Paths = paths.NewPaths(s.Config.GetGeneratedPath())
+	*s.Paths = paths.NewPaths(s.Config.GetGeneratedPath())
 	config := s.Config
 	if config.Validate() == nil {
 		if err := fsutil.EnsureDir(s.Paths.Generated.Screenshots); err != nil {
@@ -574,18 +586,25 @@ func (s *Manager) Setup(ctx context.Context, input SetupInput) error {
 	// create the config directory if it does not exist
 	// don't do anything if config is already set in the environment
 	if !config.FileEnvSet() {
-		configDir := filepath.Dir(input.ConfigLocation)
+		// #3304 - if config path is relative, it breaks the ffmpeg/ffprobe
+		// paths since they must not be relative. The config file property is
+		// resolved to an absolute path when stash is run normally, so convert
+		// relative paths to absolute paths during setup.
+		configFile, _ := filepath.Abs(input.ConfigLocation)
+
+		configDir := filepath.Dir(configFile)
+
 		if exists, _ := fsutil.DirExists(configDir); !exists {
 			if err := os.Mkdir(configDir, 0755); err != nil {
 				return fmt.Errorf("error creating config directory: %v", err)
 			}
 		}
 
-		if err := fsutil.Touch(input.ConfigLocation); err != nil {
+		if err := fsutil.Touch(configFile); err != nil {
 			return fmt.Errorf("error creating config file: %v", err)
 		}
 
-		s.Config.SetConfigFile(input.ConfigLocation)
+		s.Config.SetConfigFile(configFile)
 	}
 
 	// create the generated directory if it does not exist
@@ -649,7 +668,14 @@ func (s *Manager) Migrate(ctx context.Context, input MigrateInput) error {
 	// migration fails
 	backupPath := input.BackupPath
 	if backupPath == "" {
-		backupPath = database.DatabaseBackupPath()
+		backupPath = database.DatabaseBackupPath(s.Config.GetBackupDirectoryPath())
+	} else {
+		// check if backup path is a filename or path
+		// filename goes into backup directory, path is kept as is
+		filename := filepath.Base(backupPath)
+		if backupPath == filename {
+			backupPath = filepath.Join(s.Config.GetBackupDirectoryPathOrDefault(), filename)
+		}
 	}
 
 	// perform database backup
@@ -670,9 +696,6 @@ func (s *Manager) Migrate(ctx context.Context, input MigrateInput) error {
 
 		return errors.New(errStr)
 	}
-
-	// perform post-migration operations
-	s.PostMigrate(ctx)
 
 	// if no backup path was provided, then delete the created backup
 	if input.BackupPath == "" {

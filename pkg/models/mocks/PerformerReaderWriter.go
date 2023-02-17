@@ -80,26 +80,17 @@ func (_m *PerformerReaderWriter) CountByTagID(ctx context.Context, tagID int) (i
 }
 
 // Create provides a mock function with given fields: ctx, newPerformer
-func (_m *PerformerReaderWriter) Create(ctx context.Context, newPerformer models.Performer) (*models.Performer, error) {
+func (_m *PerformerReaderWriter) Create(ctx context.Context, newPerformer *models.Performer) error {
 	ret := _m.Called(ctx, newPerformer)
 
-	var r0 *models.Performer
-	if rf, ok := ret.Get(0).(func(context.Context, models.Performer) *models.Performer); ok {
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, *models.Performer) error); ok {
 		r0 = rf(ctx, newPerformer)
 	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*models.Performer)
-		}
+		r0 = ret.Error(0)
 	}
 
-	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, models.Performer) error); ok {
-		r1 = rf(ctx, newPerformer)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
+	return r0
 }
 
 // Destroy provides a mock function with given fields: ctx, id
@@ -314,22 +305,22 @@ func (_m *PerformerReaderWriter) FindMany(ctx context.Context, ids []int) ([]*mo
 	return r0, r1
 }
 
-// FindNamesBySceneID provides a mock function with given fields: ctx, sceneID
-func (_m *PerformerReaderWriter) FindNamesBySceneID(ctx context.Context, sceneID int) ([]*models.Performer, error) {
-	ret := _m.Called(ctx, sceneID)
+// GetAliases provides a mock function with given fields: ctx, relatedID
+func (_m *PerformerReaderWriter) GetAliases(ctx context.Context, relatedID int) ([]string, error) {
+	ret := _m.Called(ctx, relatedID)
 
-	var r0 []*models.Performer
-	if rf, ok := ret.Get(0).(func(context.Context, int) []*models.Performer); ok {
-		r0 = rf(ctx, sceneID)
+	var r0 []string
+	if rf, ok := ret.Get(0).(func(context.Context, int) []string); ok {
+		r0 = rf(ctx, relatedID)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]*models.Performer)
+			r0 = ret.Get(0).([]string)
 		}
 	}
 
 	var r1 error
 	if rf, ok := ret.Get(1).(func(context.Context, int) error); ok {
-		r1 = rf(ctx, sceneID)
+		r1 = rf(ctx, relatedID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -383,13 +374,13 @@ func (_m *PerformerReaderWriter) GetStashIDs(ctx context.Context, relatedID int)
 	return r0, r1
 }
 
-// GetTagIDs provides a mock function with given fields: ctx, performerID
-func (_m *PerformerReaderWriter) GetTagIDs(ctx context.Context, performerID int) ([]int, error) {
-	ret := _m.Called(ctx, performerID)
+// GetTagIDs provides a mock function with given fields: ctx, relatedID
+func (_m *PerformerReaderWriter) GetTagIDs(ctx context.Context, relatedID int) ([]int, error) {
+	ret := _m.Called(ctx, relatedID)
 
 	var r0 []int
 	if rf, ok := ret.Get(0).(func(context.Context, int) []int); ok {
-		r0 = rf(ctx, performerID)
+		r0 = rf(ctx, relatedID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]int)
@@ -398,7 +389,7 @@ func (_m *PerformerReaderWriter) GetTagIDs(ctx context.Context, performerID int)
 
 	var r1 error
 	if rf, ok := ret.Get(1).(func(context.Context, int) error); ok {
-		r1 = rf(ctx, performerID)
+		r1 = rf(ctx, relatedID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -436,6 +427,27 @@ func (_m *PerformerReaderWriter) Query(ctx context.Context, performerFilter *mod
 	return r0, r1, r2
 }
 
+// QueryCount provides a mock function with given fields: ctx, galleryFilter, findFilter
+func (_m *PerformerReaderWriter) QueryCount(ctx context.Context, galleryFilter *models.PerformerFilterType, findFilter *models.FindFilterType) (int, error) {
+	ret := _m.Called(ctx, galleryFilter, findFilter)
+
+	var r0 int
+	if rf, ok := ret.Get(0).(func(context.Context, *models.PerformerFilterType, *models.FindFilterType) int); ok {
+		r0 = rf(ctx, galleryFilter, findFilter)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, *models.PerformerFilterType, *models.FindFilterType) error); ok {
+		r1 = rf(ctx, galleryFilter, findFilter)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // QueryForAutoTag provides a mock function with given fields: ctx, words
 func (_m *PerformerReaderWriter) QueryForAutoTag(ctx context.Context, words []string) ([]*models.Performer, error) {
 	ret := _m.Called(ctx, words)
@@ -460,49 +472,17 @@ func (_m *PerformerReaderWriter) QueryForAutoTag(ctx context.Context, words []st
 }
 
 // Update provides a mock function with given fields: ctx, updatedPerformer
-func (_m *PerformerReaderWriter) Update(ctx context.Context, updatedPerformer models.PerformerPartial) (*models.Performer, error) {
+func (_m *PerformerReaderWriter) Update(ctx context.Context, updatedPerformer *models.Performer) error {
 	ret := _m.Called(ctx, updatedPerformer)
 
-	var r0 *models.Performer
-	if rf, ok := ret.Get(0).(func(context.Context, models.PerformerPartial) *models.Performer); ok {
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, *models.Performer) error); ok {
 		r0 = rf(ctx, updatedPerformer)
 	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*models.Performer)
-		}
+		r0 = ret.Error(0)
 	}
 
-	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, models.PerformerPartial) error); ok {
-		r1 = rf(ctx, updatedPerformer)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// UpdateFull provides a mock function with given fields: ctx, updatedPerformer
-func (_m *PerformerReaderWriter) UpdateFull(ctx context.Context, updatedPerformer models.Performer) (*models.Performer, error) {
-	ret := _m.Called(ctx, updatedPerformer)
-
-	var r0 *models.Performer
-	if rf, ok := ret.Get(0).(func(context.Context, models.Performer) *models.Performer); ok {
-		r0 = rf(ctx, updatedPerformer)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*models.Performer)
-		}
-	}
-
-	var r1 error
-	if rf, ok := ret.Get(1).(func(context.Context, models.Performer) error); ok {
-		r1 = rf(ctx, updatedPerformer)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
+	return r0
 }
 
 // UpdateImage provides a mock function with given fields: ctx, performerID, image
@@ -519,30 +499,25 @@ func (_m *PerformerReaderWriter) UpdateImage(ctx context.Context, performerID in
 	return r0
 }
 
-// UpdateStashIDs provides a mock function with given fields: ctx, performerID, stashIDs
-func (_m *PerformerReaderWriter) UpdateStashIDs(ctx context.Context, performerID int, stashIDs []models.StashID) error {
-	ret := _m.Called(ctx, performerID, stashIDs)
+// UpdatePartial provides a mock function with given fields: ctx, id, updatedPerformer
+func (_m *PerformerReaderWriter) UpdatePartial(ctx context.Context, id int, updatedPerformer models.PerformerPartial) (*models.Performer, error) {
+	ret := _m.Called(ctx, id, updatedPerformer)
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, int, []models.StashID) error); ok {
-		r0 = rf(ctx, performerID, stashIDs)
+	var r0 *models.Performer
+	if rf, ok := ret.Get(0).(func(context.Context, int, models.PerformerPartial) *models.Performer); ok {
+		r0 = rf(ctx, id, updatedPerformer)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*models.Performer)
+		}
 	}
 
-	return r0
-}
-
-// UpdateTags provides a mock function with given fields: ctx, performerID, tagIDs
-func (_m *PerformerReaderWriter) UpdateTags(ctx context.Context, performerID int, tagIDs []int) error {
-	ret := _m.Called(ctx, performerID, tagIDs)
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, int, []int) error); ok {
-		r0 = rf(ctx, performerID, tagIDs)
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context, int, models.PerformerPartial) error); ok {
+		r1 = rf(ctx, id, updatedPerformer)
 	} else {
-		r0 = ret.Error(0)
+		r1 = ret.Error(1)
 	}
 
-	return r0
+	return r0, r1
 }

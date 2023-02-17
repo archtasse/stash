@@ -18,15 +18,17 @@ func TestImagePerformers(t *testing.T) {
 	const performerName = "performer name"
 	const performerID = 2
 	performer := models.Performer{
-		ID:   performerID,
-		Name: models.NullString(performerName),
+		ID:      performerID,
+		Name:    performerName,
+		Aliases: models.NewRelatedStrings([]string{}),
 	}
 
 	const reversedPerformerName = "name performer"
 	const reversedPerformerID = 3
 	reversedPerformer := models.Performer{
-		ID:   reversedPerformerID,
-		Name: models.NullString(reversedPerformerName),
+		ID:      reversedPerformerID,
+		Name:    reversedPerformerName,
+		Aliases: models.NewRelatedStrings([]string{}),
 	}
 
 	testTables := generateTestTable(performerName, imageExt)

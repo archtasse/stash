@@ -26,15 +26,16 @@ import (
 var officialBuild string
 
 const (
-	Stash         = "stash"
-	Cache         = "cache"
-	Generated     = "generated"
-	Metadata      = "metadata"
-	Downloads     = "downloads"
-	ApiKey        = "api_key"
-	Username      = "username"
-	Password      = "password"
-	MaxSessionAge = "max_session_age"
+	Stash               = "stash"
+	Cache               = "cache"
+	BackupDirectoryPath = "backup_directory_path"
+	Generated           = "generated"
+	Metadata            = "metadata"
+	Downloads           = "downloads"
+	ApiKey              = "api_key"
+	Username            = "username"
+	Password            = "password"
+	MaxSessionAge       = "max_session_age"
 
 	DefaultMaxSessionAge = 60 * 60 * 1 // 1 hours
 
@@ -58,6 +59,12 @@ const (
 
 	MaxTranscodeSize          = "max_transcode_size"
 	MaxStreamingTranscodeSize = "max_streaming_transcode_size"
+
+	// ffmpeg extra args options
+	TranscodeInputArgs      = "ffmpeg.transcode.input_args"
+	TranscodeOutputArgs     = "ffmpeg.transcode.output_args"
+	LiveTranscodeInputArgs  = "ffmpeg.live_transcode.input_args"
+	LiveTranscodeOutputArgs = "ffmpeg.live_transcode.output_args"
 
 	ParallelTasks        = "parallel_tasks"
 	parallelTasksDefault = 1
@@ -89,6 +96,13 @@ const (
 	portDefault = 9999
 
 	ExternalHost = "external_host"
+
+	// http proxy url if required
+	Proxy = "proxy"
+
+	// urls or IPs that should not use the proxy
+	NoProxy        = "no_proxy"
+	noProxyDefault = "localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12"
 
 	// key used to sign JWT tokens
 	JWTSignKey = "jwt_secret_key"
@@ -138,6 +152,8 @@ const (
 	ContinuePlaylistDefault             = "continue_playlist_default"
 	ShowStudioAsText                    = "show_studio_as_text"
 	CSSEnabled                          = "cssEnabled"
+	JavascriptEnabled                   = "javascriptEnabled"
+	CustomLocalesEnabled                = "customLocalesEnabled"
 
 	ShowScrubber        = "show_scrubber"
 	showScrubberDefault = true
@@ -325,6 +341,12 @@ func (i *Instance) Set(key string, value interface{}) {
 	i.main.Set(key, value)
 }
 
+func (i *Instance) SetDefault(key string, value interface{}) {
+	i.Lock()
+	defer i.Unlock()
+	i.main.SetDefault(key, value)
+}
+
 func (i *Instance) SetPassword(value string) {
 	// if blank, don't bother hashing; we want it to be blank
 	if value == "" {
@@ -457,7 +479,15 @@ func (i *Instance) getStringMapString(key string) map[string]string {
 	i.RLock()
 	defer i.RUnlock()
 
-	return i.viper(key).GetStringMapString(key)
+	ret := i.viper(key).GetStringMapString(key)
+
+	// GetStringMapString returns an empty map regardless of whether the
+	// key exists or not.
+	if len(ret) == 0 {
+		return nil
+	}
+
+	return ret
 }
 
 type StashConfig struct {
@@ -516,6 +546,19 @@ func (i *Instance) GetMetadataPath() string {
 
 func (i *Instance) GetDatabasePath() string {
 	return i.getString(Database)
+}
+
+func (i *Instance) GetBackupDirectoryPath() string {
+	return i.getString(BackupDirectoryPath)
+}
+
+func (i *Instance) GetBackupDirectoryPathOrDefault() string {
+	ret := i.GetBackupDirectoryPath()
+	if ret == "" {
+		return i.GetConfigPath()
+	}
+
+	return ret
 }
 
 func (i *Instance) GetJWTSignKey() []byte {
@@ -754,6 +797,22 @@ func (i *Instance) GetMaxStreamingTranscodeSize() models.StreamingResolutionEnum
 	}
 
 	return models.StreamingResolutionEnum(ret)
+}
+
+func (i *Instance) GetTranscodeInputArgs() []string {
+	return i.getStringSlice(TranscodeInputArgs)
+}
+
+func (i *Instance) GetTranscodeOutputArgs() []string {
+	return i.getStringSlice(TranscodeOutputArgs)
+}
+
+func (i *Instance) GetLiveTranscodeInputArgs() []string {
+	return i.getStringSlice(LiveTranscodeInputArgs)
+}
+
+func (i *Instance) GetLiveTranscodeOutputArgs() []string {
+	return i.getStringSlice(LiveTranscodeOutputArgs)
 }
 
 // IsWriteImageThumbnails returns true if image thumbnails should be written
@@ -1056,6 +1115,92 @@ func (i *Instance) GetCSSEnabled() bool {
 	return i.getBool(CSSEnabled)
 }
 
+func (i *Instance) GetJavascriptPath() string {
+	// use custom.js in the same directory as the config file
+	configFileUsed := i.GetConfigFile()
+	configDir := filepath.Dir(configFileUsed)
+
+	fn := filepath.Join(configDir, "custom.js")
+
+	return fn
+}
+
+func (i *Instance) GetJavascript() string {
+	fn := i.GetJavascriptPath()
+
+	exists, _ := fsutil.FileExists(fn)
+	if !exists {
+		return ""
+	}
+
+	buf, err := os.ReadFile(fn)
+
+	if err != nil {
+		return ""
+	}
+
+	return string(buf)
+}
+
+func (i *Instance) SetJavascript(javascript string) {
+	fn := i.GetJavascriptPath()
+	i.Lock()
+	defer i.Unlock()
+
+	buf := []byte(javascript)
+
+	if err := os.WriteFile(fn, buf, 0777); err != nil {
+		logger.Warnf("error while writing %v bytes to %v: %v", len(buf), fn, err)
+	}
+}
+
+func (i *Instance) GetJavascriptEnabled() bool {
+	return i.getBool(JavascriptEnabled)
+}
+
+func (i *Instance) GetCustomLocalesPath() string {
+	// use custom-locales.json in the same directory as the config file
+	configFileUsed := i.GetConfigFile()
+	configDir := filepath.Dir(configFileUsed)
+
+	fn := filepath.Join(configDir, "custom-locales.json")
+
+	return fn
+}
+
+func (i *Instance) GetCustomLocales() string {
+	fn := i.GetCustomLocalesPath()
+
+	exists, _ := fsutil.FileExists(fn)
+	if !exists {
+		return ""
+	}
+
+	buf, err := os.ReadFile(fn)
+
+	if err != nil {
+		return ""
+	}
+
+	return string(buf)
+}
+
+func (i *Instance) SetCustomLocales(customLocales string) {
+	fn := i.GetCustomLocalesPath()
+	i.Lock()
+	defer i.Unlock()
+
+	buf := []byte(customLocales)
+
+	if err := os.WriteFile(fn, buf, 0777); err != nil {
+		logger.Warnf("error while writing %v bytes to %v: %v", len(buf), fn, err)
+	}
+}
+
+func (i *Instance) GetCustomLocalesEnabled() bool {
+	return i.getBool(CustomLocalesEnabled)
+}
+
 func (i *Instance) GetHandyKey() string {
 	return i.getString(HandyKey)
 }
@@ -1149,7 +1294,7 @@ func (i *Instance) GetDefaultGenerateSettings() *models.GenerateMetadataOptions 
 }
 
 // GetDangerousAllowPublicWithoutAuth determines if the security feature is enabled.
-// See https://github.com/stashapp/stash/wiki/Authentication-Required-When-Accessing-Stash-From-the-Internet
+// See https://docs.stashapp.cc/networking/authentication-required-when-accessing-stash-from-the-internet
 func (i *Instance) GetDangerousAllowPublicWithoutAuth() bool {
 	return i.getBool(dangerousAllowPublicWithoutAuth)
 }
@@ -1227,6 +1372,27 @@ func (i *Instance) GetMaxUploadSize() int64 {
 	return ret << 20
 }
 
+// GetProxy returns the url of a http proxy to be used for all outgoing http calls.
+func (i *Instance) GetProxy() string {
+	// Validate format
+	reg := regexp.MustCompile(`^((?:socks5h?|https?):\/\/)(([\P{Cc}]+):([\P{Cc}]+)@)?(([a-zA-Z0-9][a-zA-Z0-9.-]*)(:[0-9]{1,5})?)`)
+	proxy := i.getString(Proxy)
+	if proxy != "" && reg.MatchString(proxy) {
+		logger.Debug("Proxy is valid, using it")
+		return proxy
+	} else if proxy != "" {
+		logger.Error("Proxy is invalid, please review your configuration")
+		return ""
+	}
+	return ""
+}
+
+// GetProxy returns the url of a http proxy to be used for all outgoing http calls.
+func (i *Instance) GetNoProxy() string {
+	// NoProxy does not require validation, it is validated by the native Go library sufficiently
+	return i.getString(NoProxy)
+}
+
 // ActivatePublicAccessTripwire sets the security_tripwire_accessed_from_public_internet
 // config field to the provided IP address to indicate that stash has been accessed
 // from this public IP without authentication.
@@ -1258,13 +1424,6 @@ func (i *Instance) Validate() error {
 	}
 
 	return nil
-}
-
-func (i *Instance) SetChecksumDefaultValues(defaultAlgorithm models.HashAlgorithm, usingMD5 bool) {
-	i.Lock()
-	defer i.Unlock()
-	i.main.SetDefault(VideoFileNamingAlgorithm, defaultAlgorithm)
-	i.main.SetDefault(CalculateMD5, usingMD5)
 }
 
 func (i *Instance) setDefaultValues(write bool) error {
@@ -1308,6 +1467,10 @@ func (i *Instance) setDefaultValues(write bool) error {
 	// Set default scrapers and plugins paths
 	i.main.SetDefault(ScrapersPath, defaultScrapersPath)
 	i.main.SetDefault(PluginsPath, defaultPluginsPath)
+
+	// Set NoProxy default
+	i.main.SetDefault(NoProxy, noProxyDefault)
+
 	if write {
 		return i.main.WriteConfig()
 	}

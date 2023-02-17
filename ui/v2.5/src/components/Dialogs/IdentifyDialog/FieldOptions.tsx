@@ -1,9 +1,14 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Form, Button, Table } from "react-bootstrap";
-import { Icon } from "src/components/Shared";
+import { Icon } from "src/components/Shared/Icon";
 import * as GQL from "src/core/generated-graphql";
 import { FormattedMessage, useIntl } from "react-intl";
-import { multiValueSceneFields, SceneField, sceneFields } from "./constants";
+import {
+  multiValueSceneFields,
+  SceneField,
+  sceneFieldMessageID,
+  sceneFields,
+} from "./constants";
 import { ThreeStateBoolean } from "./ThreeStateBoolean";
 import {
   faCheck,
@@ -13,7 +18,7 @@ import {
 
 interface IFieldOptionsEditor {
   options: GQL.IdentifyFieldOptions | undefined;
-  field: string;
+  field: SceneField;
   editField: () => void;
   editOptions: (o?: GQL.IdentifyFieldOptions | null) => void;
   editing: boolean;
@@ -64,7 +69,7 @@ const FieldOptionsEditor: React.FC<IFieldOptionsEditor> = ({
   }, [resetOptions]);
 
   function renderField() {
-    return intl.formatMessage({ id: field });
+    return intl.formatMessage({ id: sceneFieldMessageID(field) });
   }
 
   function renderStrategy() {
@@ -256,9 +261,8 @@ export const FieldOptionsList: React.FC<IFieldOptionsList> = ({
   allowSetDefault = true,
   defaultOptions,
 }) => {
-  const [localFieldOptions, setLocalFieldOptions] = useState<
-    GQL.IdentifyFieldOptions[]
-  >();
+  const [localFieldOptions, setLocalFieldOptions] =
+    useState<GQL.IdentifyFieldOptions[]>();
   const [editField, setEditField] = useState<string | undefined>();
 
   useEffect(() => {

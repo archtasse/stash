@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"strconv"
 
 	"github.com/stashapp/stash/pkg/models"
@@ -13,10 +15,10 @@ func (r *queryResolver) FindPerformer(ctx context.Context, id string) (ret *mode
 		return nil, err
 	}
 
-	if err := r.withTxn(ctx, func(ctx context.Context) error {
+	if err := r.withReadTxn(ctx, func(ctx context.Context) error {
 		ret, err = r.repository.Performer.Find(ctx, idInt)
 		return err
-	}); err != nil {
+	}); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}
 
@@ -24,7 +26,7 @@ func (r *queryResolver) FindPerformer(ctx context.Context, id string) (ret *mode
 }
 
 func (r *queryResolver) FindPerformers(ctx context.Context, performerFilter *models.PerformerFilterType, filter *models.FindFilterType) (ret *FindPerformersResultType, err error) {
-	if err := r.withTxn(ctx, func(ctx context.Context) error {
+	if err := r.withReadTxn(ctx, func(ctx context.Context) error {
 		performers, total, err := r.repository.Performer.Query(ctx, performerFilter, filter)
 		if err != nil {
 			return err
@@ -43,7 +45,7 @@ func (r *queryResolver) FindPerformers(ctx context.Context, performerFilter *mod
 }
 
 func (r *queryResolver) AllPerformers(ctx context.Context) (ret []*models.Performer, err error) {
-	if err := r.withTxn(ctx, func(ctx context.Context) error {
+	if err := r.withReadTxn(ctx, func(ctx context.Context) error {
 		ret, err = r.repository.Performer.All(ctx)
 		return err
 	}); err != nil {

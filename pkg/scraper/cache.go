@@ -41,6 +41,7 @@ type GlobalConfig interface {
 	GetScraperCDPPath() string
 	GetScraperCertCheck() bool
 	GetPythonPath() string
+	GetProxy() string
 }
 
 func isCDPPathHTTP(c GlobalConfig) bool {
@@ -96,6 +97,7 @@ func newClient(gc GlobalConfig) *http.Client {
 		Transport: &http.Transport{ // ignore insecure certificates
 			TLSClientConfig:     &tls.Config{InsecureSkipVerify: !gc.GetScraperCertCheck()},
 			MaxIdleConnsPerHost: maxIdleConnsPerHost,
+			Proxy:               http.ProxyFromEnvironment,
 		},
 		Timeout: scrapeGetTimeout,
 		// defaultCheckRedirect code with max changed from 10 to maxRedirects
@@ -350,7 +352,7 @@ func (c Cache) ScrapeID(ctx context.Context, scraperID string, id int, ty Scrape
 
 func (c Cache) getScene(ctx context.Context, sceneID int) (*models.Scene, error) {
 	var ret *models.Scene
-	if err := txn.WithTxn(ctx, c.txnManager, func(ctx context.Context) error {
+	if err := txn.WithReadTxn(ctx, c.txnManager, func(ctx context.Context) error {
 		var err error
 		ret, err = c.repository.SceneFinder.Find(ctx, sceneID)
 		return err
@@ -362,7 +364,7 @@ func (c Cache) getScene(ctx context.Context, sceneID int) (*models.Scene, error)
 
 func (c Cache) getGallery(ctx context.Context, galleryID int) (*models.Gallery, error) {
 	var ret *models.Gallery
-	if err := txn.WithTxn(ctx, c.txnManager, func(ctx context.Context) error {
+	if err := txn.WithReadTxn(ctx, c.txnManager, func(ctx context.Context) error {
 		var err error
 		ret, err = c.repository.GalleryFinder.Find(ctx, galleryID)
 

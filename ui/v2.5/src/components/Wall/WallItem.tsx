@@ -1,10 +1,13 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import * as GQL from "src/core/generated-graphql";
-import { TextUtils, NavUtils } from "src/utils";
+import TextUtils from "src/utils/text";
+import NavUtils from "src/utils/navigation";
 import cx from "classnames";
 import { SceneQueue } from "src/models/sceneQueue";
 import { ConfigurationContext } from "src/hooks/Config";
+import { markerTitle } from "src/core/markers";
+import { objectTitle } from "src/core/files";
 
 interface IWallItemProps {
   index?: number;
@@ -179,16 +182,23 @@ export const WallItem: React.FC<IWallItemProps> = (props: IWallItemProps) => {
     }
   }
 
+  const title = useMemo(() => {
+    if (props.sceneMarker) {
+      return `${markerTitle(
+        props.sceneMarker
+      )} - ${TextUtils.secondsToTimestamp(props.sceneMarker.seconds)}`;
+    }
+
+    if (props.scene) {
+      return objectTitle(props.scene);
+    }
+
+    return "";
+  }, [props.sceneMarker, props.scene]);
+
   const renderText = () => {
     if (!showTextContainer) return;
 
-    const markerTitle = props.sceneMarker?.title;
-
-    const title = props.sceneMarker
-      ? `${
-          markerTitle ? `${markerTitle} - ` : ""
-        }${TextUtils.secondsToTimestamp(props.sceneMarker.seconds)}`
-      : props.scene?.title ?? "";
     const tags = props.sceneMarker
       ? [props.sceneMarker.primary_tag, ...props.sceneMarker.tags]
       : [];

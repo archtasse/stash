@@ -13,17 +13,17 @@ import {
   useTagCreate,
   queryScrapePerformerURL,
 } from "src/core/StashService";
-import {
-  Icon,
-  ImageInput,
-  LoadingIndicator,
-  CollapseButton,
-  TagSelect,
-  URLField,
-} from "src/components/Shared";
-import { ImageUtils, getStashIDs } from "src/utils";
-import { getCountryByISO } from "src/utils/country";
-import { useToast } from "src/hooks";
+import { Icon } from "src/components/Shared/Icon";
+import { ImageInput } from "src/components/Shared/ImageInput";
+import { LoadingIndicator } from "src/components/Shared/LoadingIndicator";
+import { CollapseButton } from "src/components/Shared/CollapseButton";
+import { TagSelect } from "src/components/Shared/Select";
+import { CountrySelect } from "src/components/Shared/CountrySelect";
+import { URLField } from "src/components/Shared/URLField";
+import ImageUtils from "src/utils/image";
+import { getStashIDs } from "src/utils/stashIds";
+import { stashboxDisplayName } from "src/utils/stashbox";
+import { useToast } from "src/hooks/Toast";
 import { Prompt, useHistory } from "react-router-dom";
 import { useFormik } from "formik";
 import {
@@ -32,7 +32,6 @@ import {
   stringToGender,
 } from "src/utils/gender";
 import { ConfigurationContext } from "src/hooks/Config";
-import { stashboxDisplayName } from "src/utils/stashbox";
 import { PerformerScrapeDialog } from "./PerformerScrapeDialog";
 import PerformerScrapeModal from "./PerformerScrapeModal";
 import PerformerStashBoxModal, { IStashBox } from "./PerformerStashBoxModal";
@@ -42,6 +41,7 @@ import {
   faSyncAlt,
   faTrashAlt,
 } from "@fortawesome/free-solid-svg-icons";
+import { StringListInput } from "src/components/Shared/StringListInput";
 
 const isScraper = (
   scraper: GQL.Scraper | GQL.StashBox
@@ -49,7 +49,6 @@ const isScraper = (
 
 interface IPerformerDetails {
   performer: Partial<GQL.PerformerDataFragment>;
-  isNew?: boolean;
   isVisible: boolean;
   onImageChange?: (image?: string | null) => void;
   onImageEncoding?: (loading?: boolean) => void;
@@ -58,7 +57,6 @@ interface IPerformerDetails {
 
 export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
   performer,
-  isNew,
   isVisible,
   onImageChange,
   onImageEncoding,
@@ -67,8 +65,10 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
   const Toast = useToast();
   const history = useHistory();
 
-  // Editing state
-  const [scraper, setScraper] = useState<GQL.Scraper | IStashBox | undefined>();
+  const isNew = performer.id === undefined;
+
+  // Editing stat
+  const [scraper, setScraper] = useState<GQL.Scraper | IStashBox>();
   const [newTags, setNewTags] = useState<GQL.ScrapedTag[]>();
   const [isScraperModalOpen, setIsScraperModalOpen] = useState<boolean>(false);
 
@@ -100,13 +100,24 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
 
   const schema = yup.object({
     name: yup.string().required(),
-    aliases: yup.string().optional(),
+    disambiguation: yup.string().optional(),
+    alias_list: yup
+      .array(yup.string().required())
+      .optional()
+      .test({
+        name: "unique",
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        test: (value: any) => {
+          return (value ?? []).length === new Set(value).size;
+        },
+        message: intl.formatMessage({ id: "dialogs.aliases_must_be_unique" }),
+      }),
     gender: yup.string().optional().oneOf(genderOptions),
     birthdate: yup.string().optional(),
     ethnicity: yup.string().optional(),
     eye_color: yup.string().optional(),
     country: yup.string().optional(),
-    height: yup.string().optional(),
+    height_cm: yup.number().optional(),
     measurements: yup.string().optional(),
     fake_tits: yup.string().optional(),
     career_length: yup.string().optional(),
@@ -116,7 +127,7 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
     twitter: yup.string().optional(),
     instagram: yup.string().optional(),
     tag_ids: yup.array(yup.string().required()).optional(),
-    stash_ids: yup.mixed<GQL.StashIdInput>().optional(),
+    stash_ids: yup.mixed<GQL.StashIdInput[]>().optional(),
     image: yup.string().optional().nullable(),
     details: yup.string().optional(),
     death_date: yup.string().optional(),
@@ -127,13 +138,14 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
 
   const initialValues = {
     name: performer.name ?? "",
-    aliases: performer.aliases ?? "",
+    disambiguation: performer.disambiguation ?? "",
+    alias_list: performer.alias_list?.slice().sort(),
     gender: genderToString(performer.gender ?? undefined),
     birthdate: performer.birthdate ?? "",
     ethnicity: performer.ethnicity ?? "",
     eye_color: performer.eye_color ?? "",
     country: performer.country ?? "",
-    height: performer.height ?? "",
+    height_cm: performer.height_cm ?? undefined,
     measurements: performer.measurements ?? "",
     fake_tits: performer.fake_tits ?? "",
     career_length: performer.career_length ?? "",
@@ -159,6 +171,11 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
     validationSchema: schema,
     onSubmit: (values) => onSave(values),
   });
+
+  // always dirty if creating a new performer with a name
+  if (isNew && performer.name) {
+    formik.dirty = true;
+  }
 
   function translateScrapedGender(scrapedGender?: string) {
     if (!scrapedGender) {
@@ -262,9 +279,14 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
     if (state.name) {
       formik.setFieldValue("name", state.name);
     }
-
+    if (state.disambiguation) {
+      formik.setFieldValue("disambiguation", state.disambiguation);
+    }
     if (state.aliases) {
-      formik.setFieldValue("aliases", state.aliases);
+      formik.setFieldValue(
+        "alias_list",
+        state.aliases.split(",").map((a) => a.trim())
+      );
     }
     if (state.birthdate) {
       formik.setFieldValue("birthdate", state.birthdate);
@@ -279,7 +301,7 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
       formik.setFieldValue("eye_color", state.eye_color);
     }
     if (state.height) {
-      formik.setFieldValue("height", state.height);
+      formik.setFieldValue("height_cm", parseInt(state.height, 10));
     }
     if (state.measurements) {
       formik.setFieldValue("measurements", state.measurements);
@@ -424,10 +446,10 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
     return () => onImageChange?.();
   }, [formik.values.image, onImageChange]);
 
-  useEffect(() => onImageEncoding?.(imageEncoding), [
-    onImageEncoding,
-    imageEncoding,
-  ]);
+  useEffect(
+    () => onImageEncoding?.(imageEncoding),
+    [onImageEncoding, imageEncoding]
+  );
 
   useEffect(() => {
     const newQueryableScrapers = (
@@ -445,7 +467,8 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
     return {
       ...values,
       gender: stringToGender(values.gender) ?? null,
-      weight: Number(values.weight),
+      height_cm: values.height_cm ? Number(values.height_cm) : null,
+      weight: values.weight ? Number(values.weight) : null,
       id: performer.id ?? "",
     };
   }
@@ -454,7 +477,8 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
     return {
       ...values,
       gender: stringToGender(values.gender),
-      weight: Number(values.weight),
+      height_cm: values.height_cm ? Number(values.height_cm) : null,
+      weight: values.weight ? Number(values.weight) : null,
     };
   }
 
@@ -545,7 +569,6 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
     const result: GQL.ScrapedPerformerDataFragment = {
       ...performerResult,
       images: performerResult.images ?? undefined,
-      country: getCountryByISO(performerResult.country),
       __typename: "ScrapedPerformer",
     };
 
@@ -636,7 +659,6 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
       ...formik.values,
       gender: stringToGender(formik.values.gender),
       image: formik.values.image ?? performer.image_path,
-      weight: Number(formik.values.weight),
     };
 
     return (
@@ -798,16 +820,26 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
     );
   }
 
-  function renderTextField(field: string, title: string, placeholder?: string) {
+  function renderField(
+    field: string,
+    props?: {
+      messageID?: string;
+      placeholder?: string;
+      type?: string;
+    }
+  ) {
+    const title = intl.formatMessage({ id: props?.messageID ?? field });
+
     return (
       <Form.Group controlId={field} as={Row}>
         <Form.Label column xs={labelXS} xl={labelXL}>
-          <FormattedMessage id={field} defaultMessage={title} />
+          {title}
         </Form.Label>
         <Col xs={fieldXS} xl={fieldXL}>
           <Form.Control
+            type={props?.type ?? "text"}
             className="text-input"
-            placeholder={placeholder ?? title}
+            placeholder={props?.placeholder ?? title}
             {...formik.getFieldProps(field)}
             isInvalid={!!formik.getFieldMeta(field).error}
           />
@@ -845,16 +877,32 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
           </Col>
         </Form.Group>
 
+        <Form.Group controlId="disambiguation" as={Row}>
+          <Form.Label column xs={labelXS} xl={labelXL}>
+            <FormattedMessage id="disambiguation" />
+          </Form.Label>
+          <Col xs={fieldXS} xl={fieldXL}>
+            <Form.Control
+              className="text-input"
+              placeholder={intl.formatMessage({ id: "disambiguation" })}
+              {...formik.getFieldProps("disambiguation")}
+              isInvalid={!!formik.errors.disambiguation}
+            />
+            <Form.Control.Feedback type="invalid">
+              {formik.errors.disambiguation}
+            </Form.Control.Feedback>
+          </Col>
+        </Form.Group>
+
         <Form.Group controlId="aliases" as={Row}>
-          <Form.Label column sm={labelXS} xl={labelXL}>
+          <Form.Label column xs={labelXS} xl={labelXL}>
             <FormattedMessage id="aliases" />
           </Form.Label>
-          <Col sm={fieldXS} xl={fieldXL}>
-            <Form.Control
-              as="textarea"
-              className="text-input"
-              placeholder={intl.formatMessage({ id: "aliases" })}
-              {...formik.getFieldProps("aliases")}
+          <Col xs={fieldXS} xl={fieldXL}>
+            <StringListInput
+              value={formik.values.alias_list ?? []}
+              setValue={(value) => formik.setFieldValue("alias_list", value)}
+              errors={formik.errors.alias_list}
             />
           </Col>
         </Form.Group>
@@ -878,16 +926,33 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
           </Col>
         </Form.Group>
 
-        {renderTextField("birthdate", "Birthdate", "YYYY-MM-DD")}
-        {renderTextField("death_date", "Death Date", "YYYY-MM-DD")}
-        {renderTextField("country", "Country")}
-        {renderTextField("ethnicity", "Ethnicity")}
-        {renderTextField("hair_color", "Hair Color")}
-        {renderTextField("eye_color", "Eye Color")}
-        {renderTextField("height", "Height (cm)")}
-        {renderTextField("weight", "Weight (kg)")}
-        {renderTextField("measurements", "Measurements")}
-        {renderTextField("fake_tits", "Fake Tits")}
+        {renderField("birthdate", { placeholder: "YYYY-MM-DD" })}
+        {renderField("death_date", { placeholder: "YYYY-MM-DD" })}
+
+        <Form.Group as={Row}>
+          <Form.Label column xs={labelXS} xl={labelXL}>
+            <FormattedMessage id="country" />
+          </Form.Label>
+          <Col xs={fieldXS} xl={fieldXL}>
+            <CountrySelect
+              value={formik.getFieldProps("country").value}
+              onChange={(value) => formik.setFieldValue("country", value)}
+            />
+          </Col>
+        </Form.Group>
+
+        {renderField("ethnicity")}
+        {renderField("hair_color")}
+        {renderField("eye_color")}
+        {renderField("height_cm", {
+          type: "number",
+        })}
+        {renderField("weight", {
+          type: "number",
+          messageID: "weight_kg",
+        })}
+        {renderField("measurements")}
+        {renderField("fake_tits")}
 
         <Form.Group controlId="tattoos" as={Row}>
           <Form.Label column sm={labelXS} xl={labelXL}>
@@ -917,7 +982,7 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
           </Col>
         </Form.Group>
 
-        {renderTextField("career_length", "Career Length")}
+        {renderField("career_length")}
 
         <Form.Group controlId="url" as={Row}>
           <Form.Label column xs={labelXS} xl={labelXL}>
@@ -932,8 +997,8 @@ export const PerformerEditPanel: React.FC<IPerformerDetails> = ({
           </Col>
         </Form.Group>
 
-        {renderTextField("twitter", "Twitter")}
-        {renderTextField("instagram", "Instagram")}
+        {renderField("twitter")}
+        {renderField("instagram")}
         <Form.Group controlId="details" as={Row}>
           <Form.Label column sm={labelXS} xl={labelXL}>
             <FormattedMessage id="details" />

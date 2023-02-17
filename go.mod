@@ -58,6 +58,7 @@ require (
 	github.com/vearutop/statigz v1.1.6
 	github.com/vektah/dataloaden v0.3.0
 	github.com/vektah/gqlparser/v2 v2.4.1
+	github.com/xWTF/chardet v0.0.0-20230208095535-c780f2ac244e
 	gopkg.in/guregu/null.v4 v4.0.0
 )
 
@@ -108,4 +109,4 @@ require (
 
 replace git.apache.org/thrift.git => github.com/apache/thrift v0.0.0-20180902110319-2566ecd5d999
 
-go 1.17
+go 1.19

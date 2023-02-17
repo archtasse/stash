@@ -96,7 +96,7 @@ type Query {
 
   """Scrapes a complete performer record based on a URL"""
   scrapePerformerURL(url: String!): ScrapedPerformer
-  """Scrapes a complete performer record based on a URL"""
+  """Scrapes a complete scene record based on a URL"""
   scrapeSceneURL(url: String!): ScrapedScene
   """Scrapes a complete gallery record based on a URL"""
   scrapeGalleryURL(url: String!): ScrapedGallery
@@ -155,14 +155,16 @@ type Query {
   version: Version!
 
   # LatestVersion
-  latestversion: ShortVersion!
+  latestversion: LatestVersion!
 }
 
 type Mutation {
   setup(input: SetupInput!): Boolean!
   migrate(input: MigrateInput!): Boolean!
 
+  sceneCreate(input: SceneCreateInput!): Scene
   sceneUpdate(input: SceneUpdateInput!): Scene
+  sceneMerge(input: SceneMergeInput!): Scene
   bulkSceneUpdate(input: BulkSceneUpdateInput!): [Scene!]
   sceneDestroy(input: SceneDestroyInput!): Boolean!
   scenesDestroy(input: ScenesDestroyInput!): Boolean!
@@ -175,12 +177,20 @@ type Mutation {
   """Resets the o-counter for a scene to 0. Returns the new value"""
   sceneResetO(id: ID!): Int!
 
+  """Sets the resume time point (if provided) and adds the provided duration to the scene's play duration"""
+  sceneSaveActivity(id: ID!, resume_time: Float, playDuration: Float): Boolean!
+
+  """Increments the play count for the scene. Returns the new play count value."""
+  sceneIncrementPlayCount(id: ID!): Int!
+
   """Generates screenshot at specified time in seconds. Leave empty to generate default screenshot"""
   sceneGenerateScreenshot(id: ID!, at: Float): String!
 
   sceneMarkerCreate(input: SceneMarkerCreateInput!): SceneMarker
   sceneMarkerUpdate(input: SceneMarkerUpdateInput!): SceneMarker
   sceneMarkerDestroy(id: ID!): Boolean!
+
+  sceneAssignFile(input: AssignSceneFileInput!): Boolean!
 
   imageUpdate(input: ImageUpdateInput!): Image
   bulkImageUpdate(input: BulkImageUpdateInput!): [Image!]
@@ -227,6 +237,8 @@ type Mutation {
   tagsDestroy(ids: [ID!]!): Boolean!
   tagsMerge(input: TagsMergeInput!): Tag
 
+  deleteFiles(ids: [ID!]!): Boolean!
+
   # Saved filters
   saveFilter(input: SaveFilterInput!): SavedFilter!
   destroySavedFilter(input: DestroyFilterInput!): Boolean!
@@ -269,6 +281,9 @@ type Mutation {
   metadataIdentify(input: IdentifyMetadataInput!): ID!
   """Migrate generated files for the current hash naming"""
   migrateHashNaming: ID!
+  
+  """Anonymise the database in a separate file. Optionally returns a link to download the database file"""
+  anonymiseDatabase(input: AnonymiseDatabaseInput!): String
 
   """Reload scrapers"""
   reloadScrapers: Boolean!

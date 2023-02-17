@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -40,21 +41,24 @@ func (rs performerRoutes) Image(w http.ResponseWriter, r *http.Request) {
 
 	var image []byte
 	if defaultParam != "true" {
-		readTxnErr := txn.WithTxn(r.Context(), rs.txnManager, func(ctx context.Context) error {
+		readTxnErr := txn.WithReadTxn(r.Context(), rs.txnManager, func(ctx context.Context) error {
 			image, _ = rs.performerFinder.GetImage(ctx, performer.ID)
 			return nil
 		})
+		if errors.Is(readTxnErr, context.Canceled) {
+			return
+		}
 		if readTxnErr != nil {
-			logger.Warnf("couldn't execute getting a performer image from read transaction: %v", readTxnErr)
+			logger.Warnf("read transaction error on fetch performer image: %v", readTxnErr)
 		}
 	}
 
 	if len(image) == 0 || defaultParam == "true" {
-		image, _ = getRandomPerformerImageUsingName(performer.Name.String, performer.Gender.String, config.GetInstance().GetCustomPerformerImageLocation())
+		image, _ = getRandomPerformerImageUsingName(performer.Name, performer.Gender, config.GetInstance().GetCustomPerformerImageLocation())
 	}
 
 	if err := utils.ServeImage(image, w, r); err != nil {
-		logger.Warnf("error serving image: %v", err)
+		logger.Warnf("error serving performer image: %v", err)
 	}
 }
 
@@ -67,11 +71,12 @@ func (rs performerRoutes) PerformerCtx(next http.Handler) http.Handler {
 		}
 
 		var performer *models.Performer
-		if err := txn.WithTxn(r.Context(), rs.txnManager, func(ctx context.Context) error {
+		_ = txn.WithReadTxn(r.Context(), rs.txnManager, func(ctx context.Context) error {
 			var err error
 			performer, err = rs.performerFinder.Find(ctx, performerID)
 			return err
-		}); err != nil {
+		})
+		if performer == nil {
 			http.Error(w, http.StatusText(404), 404)
 			return
 		}

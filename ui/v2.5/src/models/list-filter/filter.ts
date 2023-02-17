@@ -1,5 +1,5 @@
-import queryString, { ParsedQuery } from "query-string";
 import {
+  ConfigDataFragment,
   FilterMode,
   FindFilterType,
   SortDirectionEnum,
@@ -8,15 +8,26 @@ import { Criterion, CriterionValue } from "./criteria/criterion";
 import { makeCriteria } from "./criteria/factory";
 import { DisplayMode } from "./types";
 
-interface IQueryParameters {
-  perPage?: string;
+interface IDecodedParams {
+  perPage?: number;
   sortby?: string;
   sortdir?: string;
-  disp?: string;
+  disp?: DisplayMode;
   q?: string;
-  p?: string;
+  p?: number;
+  z?: number;
   c?: string[];
-  z?: string;
+}
+
+interface IEncodedParams {
+  perPage?: string | null;
+  sortby?: string | null;
+  sortdir?: string | null;
+  disp?: string | null;
+  q?: string | null;
+  p?: string | null;
+  z?: string | null;
+  c?: string[];
 }
 
 const DEFAULT_PARAMS = {
@@ -29,6 +40,7 @@ const DEFAULT_PARAMS = {
 // TODO: handle customCriteria
 export class ListFilterModel {
   public mode: FilterMode;
+  private config: ConfigDataFragment | undefined;
   public searchTerm?: string;
   public currentPage = DEFAULT_PARAMS.currentPage;
   public itemsPerPage = DEFAULT_PARAMS.itemsPerPage;
@@ -42,80 +54,70 @@ export class ListFilterModel {
 
   public constructor(
     mode: FilterMode,
-    rawParms?: ParsedQuery<string>,
+    config: ConfigDataFragment | undefined,
     defaultSort?: string,
     defaultDisplayMode?: DisplayMode,
     defaultZoomIndex?: number
   ) {
     this.mode = mode;
-    const params = rawParms as IQueryParameters;
+    this.config = config;
     this.sortBy = defaultSort;
     if (defaultDisplayMode !== undefined) this.displayMode = defaultDisplayMode;
     if (defaultZoomIndex !== undefined) {
       this.defaultZoomIndex = defaultZoomIndex;
       this.zoomIndex = defaultZoomIndex;
     }
-    if (params) this.configureFromQueryParameters(params);
   }
 
   public clone() {
-    return Object.assign(new ListFilterModel(this.mode), this);
+    return Object.assign(new ListFilterModel(this.mode, this.config), this);
   }
 
-  public configureFromQueryParameters(params: IQueryParameters) {
+  public configureFromDecodedParams(params: IDecodedParams) {
+    if (params.perPage !== undefined) {
+      this.itemsPerPage = params.perPage;
+    }
     if (params.sortby !== undefined) {
       this.sortBy = params.sortby;
 
       // parse the random seed if provided
-      const randomPrefix = "random_";
-      if (this.sortBy && this.sortBy.startsWith(randomPrefix)) {
-        const seedStr = this.sortBy.substring(randomPrefix.length);
-
+      const match = this.sortBy.match(/^random_(\d+)$/);
+      if (match) {
         this.sortBy = "random";
-        try {
-          this.randomSeed = Number.parseInt(seedStr, 10);
-        } catch (err) {
-          // ignore
-        }
+        this.randomSeed = Number.parseInt(match[1], 10);
       }
     }
-    if (params.sortdir !== undefined) {
-      this.sortDirection =
-        params.sortdir === "desc"
-          ? SortDirectionEnum.Desc
-          : SortDirectionEnum.Asc;
-    }
+    // #3193 - sortdir undefined means asc
+    this.sortDirection =
+      params.sortdir === "desc"
+        ? SortDirectionEnum.Desc
+        : SortDirectionEnum.Asc;
+
     if (params.disp !== undefined) {
-      this.displayMode = Number.parseInt(params.disp, 10);
+      this.displayMode = params.disp;
     }
-    if (params.q) {
-      this.searchTerm = params.q.trim();
+    if (params.q !== undefined) {
+      this.searchTerm = params.q;
+    } else {
+      // #1795 - reset search term if not provided
+      this.searchTerm = "";
     }
-    this.currentPage = params.p ? Number.parseInt(params.p, 10) : 1;
-    if (params.perPage) this.itemsPerPage = Number.parseInt(params.perPage, 10);
+    this.currentPage = params.p ?? 1;
     if (params.z !== undefined) {
-      const zoomIndex = Number.parseInt(params.z, 10);
-      if (zoomIndex >= 0 && !Number.isNaN(zoomIndex)) {
-        this.zoomIndex = zoomIndex;
-      }
+      this.zoomIndex = params.z;
     }
 
     this.criteria = [];
     if (params.c !== undefined) {
-      let jsonParameters: string[];
-      if (params.c instanceof Array) {
-        jsonParameters = params.c;
-      } else {
-        jsonParameters = [params.c];
-      }
-
-      jsonParameters.forEach((jsonString) => {
+      for (const jsonString of params.c) {
         try {
           const encodedCriterion = JSON.parse(jsonString);
-          const criterion = makeCriteria(encodedCriterion.type);
+          const criterion = makeCriteria(this.config, encodedCriterion.type);
           // it's possible that we have unsupported criteria. Just skip if so.
           if (criterion) {
-            criterion.decodeValue(encodedCriterion.value);
+            if (encodedCriterion.value !== undefined) {
+              criterion.value = encodedCriterion.value;
+            }
             criterion.modifier = encodedCriterion.modifier;
             this.criteria.push(criterion);
           }
@@ -123,8 +125,119 @@ export class ListFilterModel {
           // eslint-disable-next-line no-console
           console.error("Failed to parse encoded criterion:", err);
         }
-      });
+      }
     }
+  }
+
+  // Does not decode any URL-encoding, only type conversions
+  public static decodeParams(params: IEncodedParams): IDecodedParams {
+    const ret: IDecodedParams = {};
+
+    if (params.perPage) {
+      ret.perPage = Number.parseInt(params.perPage, 10);
+    }
+    if (params.sortby) {
+      ret.sortby = params.sortby;
+    }
+    if (params.sortdir) {
+      ret.sortdir = params.sortdir;
+    }
+    if (params.disp) {
+      ret.disp = Number.parseInt(params.disp, 10);
+    }
+    if (params.q) {
+      ret.q = params.q.trim();
+    }
+    if (params.p) {
+      ret.p = Number.parseInt(params.p, 10);
+    }
+    if (params.z) {
+      const zoomIndex = Number.parseInt(params.z, 10);
+      if (zoomIndex >= 0) {
+        ret.z = zoomIndex;
+      }
+    }
+
+    if (params.c && params.c.length !== 0) {
+      ret.c = params.c.map((jsonString) =>
+        ListFilterModel.translateJSON(jsonString, true)
+      );
+    }
+
+    return ret;
+  }
+
+  private static translateJSON(jsonString: string, decoding: boolean) {
+    let inString = false;
+    let escape = false;
+    return [...jsonString]
+      .map((c) => {
+        if (escape) {
+          // this character has been escaped, skip
+          escape = false;
+          return c;
+        }
+
+        switch (c) {
+          case "\\":
+            // escape the next character if in a string
+            if (inString) {
+              escape = true;
+            }
+            break;
+          case '"':
+            // unescaped quote, toggle inString
+            inString = !inString;
+            break;
+          case "(":
+            // decode only: restore ( to { if not in a string
+            if (decoding && !inString) {
+              return "{";
+            }
+            break;
+          case ")":
+            // decode only: restore ) to } if not in a string
+            if (decoding && !inString) {
+              return "}";
+            }
+            break;
+          case "{":
+            // encode only: replace { with ( if not in a string
+            if (!decoding && !inString) {
+              return "(";
+            }
+            break;
+          case "}":
+            // encode only: replace } with ) if not in a string
+            if (!decoding && !inString) {
+              return ")";
+            }
+            break;
+        }
+
+        return c;
+      })
+      .join("");
+  }
+
+  public configureFromQueryString(queryString: string) {
+    const query = new URLSearchParams(queryString);
+    const params = {
+      perPage: query.get("perPage"),
+      sortby: query.get("sortby"),
+      sortdir: query.get("sortdir"),
+      disp: query.get("disp"),
+      q: query.get("q"),
+      p: query.get("p"),
+      z: query.get("z"),
+      c: query.getAll("c"),
+    };
+    const decoded = ListFilterModel.decodeParams(params);
+    this.configureFromDecodedParams(decoded);
+  }
+
+  public configureFromJSON(json: string) {
+    this.configureFromDecodedParams(JSON.parse(json));
   }
 
   private setRandomSeed() {
@@ -143,49 +256,65 @@ export class ListFilterModel {
     this.setRandomSeed();
 
     if (this.sortBy === "random") {
-      return `${this.sortBy}_${this.randomSeed.toString()}`;
+      return `random_${this.randomSeed.toString()}`;
     }
 
     return this.sortBy;
   }
 
-  public getQueryParameters() {
-    const encodedCriteria: string[] = this.criteria.map((criterion) =>
-      criterion.toJSON()
-    );
+  // Returns query parameters with necessary parts URL-encoded
+  public getEncodedParams(): IEncodedParams {
+    const encodedCriteria: string[] = this.criteria.map((criterion) => {
+      let str = ListFilterModel.translateJSON(criterion.toJSON(), false);
 
-    const result = {
+      // URL-encode other characters
+      str = encodeURI(str);
+
+      // only the reserved characters ?#&;=+ need to be URL-encoded
+      // as they have special meaning in query strings
+      str = str.replaceAll("?", encodeURIComponent("?"));
+      str = str.replaceAll("#", encodeURIComponent("#"));
+      str = str.replaceAll("&", encodeURIComponent("&"));
+      str = str.replaceAll(";", encodeURIComponent(";"));
+      str = str.replaceAll("=", encodeURIComponent("="));
+      str = str.replaceAll("+", encodeURIComponent("+"));
+
+      return str;
+    });
+
+    return {
       perPage:
         this.itemsPerPage !== DEFAULT_PARAMS.itemsPerPage
-          ? this.itemsPerPage
+          ? String(this.itemsPerPage)
           : undefined,
-      sortby: this.getSortBy() ?? undefined,
+      sortby: this.getSortBy(),
       sortdir:
         this.sortDirection === SortDirectionEnum.Desc ? "desc" : undefined,
       disp:
         this.displayMode !== DEFAULT_PARAMS.displayMode
-          ? this.displayMode
+          ? String(this.displayMode)
           : undefined,
       q: this.searchTerm ? encodeURIComponent(this.searchTerm) : undefined,
       p:
         this.currentPage !== DEFAULT_PARAMS.currentPage
-          ? this.currentPage
+          ? String(this.currentPage)
           : undefined,
-      z: this.zoomIndex !== this.defaultZoomIndex ? this.zoomIndex : undefined,
+      z:
+        this.zoomIndex !== this.defaultZoomIndex
+          ? String(this.zoomIndex)
+          : undefined,
       c: encodedCriteria,
     };
-
-    return result;
   }
 
-  public getSavedQueryParameters() {
+  public makeSavedFilterJSON() {
     const encodedCriteria: string[] = this.criteria.map((criterion) =>
       criterion.toJSON()
     );
 
     const result = {
       perPage: this.itemsPerPage,
-      sortby: this.getSortBy() ?? undefined,
+      sortby: this.getSortBy(),
       sortdir:
         this.sortDirection === SortDirectionEnum.Desc ? "desc" : undefined,
       disp: this.displayMode,
@@ -194,11 +323,41 @@ export class ListFilterModel {
       c: encodedCriteria,
     };
 
-    return result;
+    return JSON.stringify(result);
   }
 
   public makeQueryParameters(): string {
-    return queryString.stringify(this.getQueryParameters(), { encode: false });
+    const query: string[] = [];
+    const params = this.getEncodedParams();
+
+    if (params.q) {
+      query.push(`q=${params.q}`);
+    }
+    if (params.c) {
+      for (const c of params.c) {
+        query.push(`c=${c}`);
+      }
+    }
+    if (params.sortby) {
+      query.push(`sortby=${params.sortby}`);
+    }
+    if (params.sortdir) {
+      query.push(`sortdir=${params.sortdir}`);
+    }
+    if (params.perPage) {
+      query.push(`perPage=${params.perPage}`);
+    }
+    if (params.disp) {
+      query.push(`disp=${params.disp}`);
+    }
+    if (params.z) {
+      query.push(`z=${params.z}`);
+    }
+    if (params.p) {
+      query.push(`p=${params.p}`);
+    }
+
+    return query.join("&");
   }
 
   // TODO: These don't support multiple of the same criteria, only the last one set is used.

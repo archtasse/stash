@@ -3,16 +3,28 @@ import React, { MouseEvent, useMemo } from "react";
 import { Button, ButtonGroup } from "react-bootstrap";
 import cx from "classnames";
 import * as GQL from "src/core/generated-graphql";
-import { Icon, TagLink, HoverPopover, SweatDrops } from "src/components/Shared";
-import { PerformerPopoverButton } from "../Shared/PerformerPopoverButton";
-import { GridCard } from "../Shared/GridCard";
-import { RatingStars } from "../Scenes/SceneDetails/RatingStars";
-import { useImageUpdate } from "../../core/StashService";
-import { useToast } from "src/hooks";
-import { faBox, faSearch, faTag } from "@fortawesome/free-solid-svg-icons";
+import { Icon } from "src/components/Shared/Icon";
+import { TagLink } from "src/components/Shared/TagLink";
+import { HoverPopover } from "src/components/Shared/HoverPopover";
+import { SweatDrops } from "src/components/Shared/SweatDrops";
+import { PerformerPopoverButton } from "src/components/Shared/PerformerPopoverButton";
+import { GridCard } from "src/components/Shared/GridCard";
+import {
+  faBox,
+  faImages,
+  faSearch,
+  faTag,
+} from "@fortawesome/free-solid-svg-icons";
 import { objectTitle } from "src/core/files";
+import { RatingStars } from "../Shared/Rating/RatingStars";
+import { defaultRatingStarPrecision } from "../../utils/rating";
+import { defaultRatingSystemOptions } from "src/utils/rating";
+import { useImageUpdate } from "../../core/StashService";
+import { useToast } from "../../hooks/Toast";
+import { IUIConfig } from "../../core/config";
+import { ConfigurationContext } from "../../hooks/Config";
 
-interface IImageRaterProps {
+interface IImageCardProps {
   image: GQL.SlimImageDataFragment;
   selecting?: boolean;
   selected?: boolean | undefined;
@@ -21,8 +33,8 @@ interface IImageRaterProps {
   onPreview?: (ev: MouseEvent) => void;
 }
 
-export const ImageRater: React.FC<IImageRaterProps> = (
-  props: IImageRaterProps
+export const ImageRater: React.FC<IImageCardProps> = (
+  props: IImageCardProps
 ) => {
   const file = useMemo(
     () => (props.image.files.length > 0 ? props.image.files[0] : undefined),
@@ -31,6 +43,10 @@ export const ImageRater: React.FC<IImageRaterProps> = (
   const [updateImage] = useImageUpdate();
   const Toast = useToast();
   const [isUpdating, setIsUpdating] = React.useState(false);
+  const { configuration: config } = React.useContext(ConfigurationContext);
+  const ratingSystemOptions =
+    (config?.ui as IUIConfig)?.ratingSystemOptions ??
+    defaultRatingSystemOptions;
 
   function maybeRenderTagPopoverButton() {
     if (props.image.tags.length <= 0) return;
@@ -74,6 +90,27 @@ export const ImageRater: React.FC<IImageRaterProps> = (
     }
   }
 
+  function maybeRenderGallery() {
+    if (props.image.galleries.length <= 0) return;
+
+    const popoverContent = props.image.galleries.map((gallery) => (
+      <TagLink key={gallery.id} gallery={gallery} />
+    ));
+
+    return (
+      <HoverPopover
+        className="gallery-count"
+        placement="bottom"
+        content={popoverContent}
+      >
+        <Button className="minimal">
+          <Icon icon={faImages} />
+          <span>{props.image.galleries.length}</span>
+        </Button>
+      </HoverPopover>
+    );
+  }
+
   function maybeRenderOrganized() {
     if (props.image.organized) {
       return (
@@ -91,6 +128,7 @@ export const ImageRater: React.FC<IImageRaterProps> = (
       props.image.tags.length > 0 ||
       props.image.performers.length > 0 ||
       props.image.o_counter ||
+      props.image.galleries.length > 0 ||
       props.image.organized
     ) {
       return (
@@ -100,6 +138,7 @@ export const ImageRater: React.FC<IImageRaterProps> = (
             {maybeRenderTagPopoverButton()}
             {maybeRenderPerformerPopoverButton()}
             {maybeRenderOCounter()}
+            {maybeRenderGallery()}
             {maybeRenderOrganized()}
           </ButtonGroup>
         </>
@@ -127,14 +166,13 @@ export const ImageRater: React.FC<IImageRaterProps> = (
     setIsUpdating(false);
   }
 
-  function getImageInput(rating: number | undefined): GQL.ImageUpdateInput {
+  function getImageInput(rating100: number | undefined): GQL.ImageUpdateInput {
     return {
       id: props.image.id,
-      rating: rating,
+      rating100: rating100,
     };
   }
 
-  // Removed Rating Banner           <RatingBanner rating={props.image.rating} />
   return (
     <GridCard
       className={`image-card zoom-${props.zoomIndex}`}
@@ -163,7 +201,10 @@ export const ImageRater: React.FC<IImageRaterProps> = (
       details={
         <div className={cx("image-card-rater-stars")}>
           <RatingStars
-            value={props.image.rating ?? undefined}
+            precision={
+              ratingSystemOptions.starPrecision ?? defaultRatingStarPrecision
+            }
+            value={props.image.rating100 ?? undefined}
             onSetRating={(value) => {
               onSave(getImageInput(value));
             }}
@@ -171,6 +212,9 @@ export const ImageRater: React.FC<IImageRaterProps> = (
           />
         </div>
       }
+      selected={props.selected}
+      selecting={props.selecting}
+      onSelectedChanged={props.onSelectedChanged}
     />
   );
 };

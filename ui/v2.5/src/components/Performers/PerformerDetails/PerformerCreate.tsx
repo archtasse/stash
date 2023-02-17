@@ -1,11 +1,18 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { FormattedMessage, useIntl } from "react-intl";
-import { LoadingIndicator } from "src/components/Shared";
+import { LoadingIndicator } from "src/components/Shared/LoadingIndicator";
 import { PerformerEditPanel } from "./PerformerEditPanel";
+import { useLocation } from "react-router-dom";
 
 const PerformerCreate: React.FC = () => {
   const [imagePreview, setImagePreview] = useState<string | null>();
   const [imageEncoding, setImageEncoding] = useState<boolean>(false);
+
+  const location = useLocation();
+  const query = useMemo(() => new URLSearchParams(location.search), [location]);
+  const performer = {
+    name: query.get("q") ?? undefined,
+  };
 
   const activeImage = imagePreview ?? "";
   const intl = useIntl();
@@ -41,9 +48,8 @@ const PerformerCreate: React.FC = () => {
           />
         </h2>
         <PerformerEditPanel
-          performer={{}}
+          performer={performer}
           isVisible
-          isNew
           onImageChange={onImageChange}
           onImageEncoding={onImageEncoding}
         />

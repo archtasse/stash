@@ -17,11 +17,16 @@
 
 # GraphQL generated output
 internal/api/generated_*.go
-ui/v2.5/src/core/generated-*.tsx
 
 ####
 # Jetbrains
 ####
+
+
+####
+# Visual Studio
+####
+/.vs
 
 # User-specific stuff
 .idea/**/workspace.xml
@@ -58,7 +63,6 @@ node_modules
 /stash
 dist
 .DS_Store
-
 /_docker*/
 /_gitlab_token
 /docker-compose.yml

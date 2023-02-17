@@ -1,17 +1,23 @@
-import React, { useState } from "react";
-import { useHistory } from "react-router-dom";
+import React, { useMemo, useState } from "react";
+import { useHistory, useLocation } from "react-router-dom";
 
 import * as GQL from "src/core/generated-graphql";
 import { useTagCreate } from "src/core/StashService";
-import { ImageUtils } from "src/utils";
-import { LoadingIndicator } from "src/components/Shared";
-import { useToast } from "src/hooks";
+import ImageUtils from "src/utils/image";
+import { LoadingIndicator } from "src/components/Shared/LoadingIndicator";
+import { useToast } from "src/hooks/Toast";
 import { tagRelationHook } from "src/core/tags";
 import { TagEditPanel } from "./TagEditPanel";
 
 const TagCreate: React.FC = () => {
   const history = useHistory();
+  const location = useLocation();
   const Toast = useToast();
+
+  const query = useMemo(() => new URLSearchParams(location.search), [location]);
+  const tag = {
+    name: query.get("q") ?? undefined,
+  };
 
   // Editing tag state
   const [image, setImage] = useState<string | null>();
@@ -54,7 +60,7 @@ const TagCreate: React.FC = () => {
           parents: created.parents,
           children: created.children,
         });
-        return created.id;
+        history.push(`/tags/${result.data.tagCreate.id}`);
       }
     } catch (e) {
       Toast.error(e);
@@ -78,6 +84,7 @@ const TagCreate: React.FC = () => {
           )}
         </div>
         <TagEditPanel
+          tag={tag}
           onSubmit={onSave}
           onCancel={() => history.push("/tags")}
           onDelete={() => {}}

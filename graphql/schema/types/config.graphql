@@ -37,6 +37,8 @@ input ConfigGeneralInput {
   stashes: [StashConfigInput!]
   """Path to the SQLite database"""
   databasePath: String
+  """Path to backup directory"""
+  backupDirectoryPath: String
   """Path to generated files"""
   generatedPath: String
   """Path to import/export files"""
@@ -67,6 +69,21 @@ input ConfigGeneralInput {
   maxTranscodeSize: StreamingResolutionEnum
   """Max streaming transcode size"""
   maxStreamingTranscodeSize: StreamingResolutionEnum
+  
+  """ffmpeg transcode input args - injected before input file
+  These are applied to generated transcodes (previews and transcodes)"""
+  transcodeInputArgs: [String!]
+  """ffmpeg transcode output args - injected before output file
+  These are applied to generated transcodes (previews and transcodes)"""
+  transcodeOutputArgs: [String!]
+
+  """ffmpeg stream input args - injected before input file
+  These are applied when live transcoding"""
+  liveTranscodeInputArgs: [String!]
+  """ffmpeg stream output args - injected before output file
+  These are applied when live transcoding"""
+  liveTranscodeOutputArgs: [String!]
+
   """Write image thumbnails to disk when generating on the fly"""
   writeImageThumbnails: Boolean
   """Username"""
@@ -116,6 +133,8 @@ type ConfigGeneralResult {
   stashes: [StashConfig!]!
   """Path to the SQLite database"""
   databasePath: String!
+  """Path to backup directory"""
+  backupDirectoryPath: String!
   """Path to generated files"""
   generatedPath: String!
   """Path to import/export files"""
@@ -148,6 +167,21 @@ type ConfigGeneralResult {
   maxTranscodeSize: StreamingResolutionEnum
   """Max streaming transcode size"""
   maxStreamingTranscodeSize: StreamingResolutionEnum
+
+  """ffmpeg transcode input args - injected before input file
+  These are applied to generated transcodes (previews and transcodes)"""
+  transcodeInputArgs: [String!]!
+  """ffmpeg transcode output args - injected before output file
+  These are applied to generated transcodes (previews and transcodes)"""
+  transcodeOutputArgs: [String!]!
+
+  """ffmpeg stream input args - injected before input file
+  These are applied when live transcoding"""
+  liveTranscodeInputArgs: [String!]!
+  """ffmpeg stream output args - injected before output file
+  These are applied when live transcoding"""
+  liveTranscodeOutputArgs: [String!]!
+
   """Write image thumbnails to disk when generating on the fly"""
   writeImageThumbnails: Boolean!
   """API Key"""
@@ -259,6 +293,14 @@ input ConfigInterfaceInput {
   """Custom CSS"""
   css: String
   cssEnabled: Boolean
+
+  """Custom Javascript"""
+  javascript: String
+  javascriptEnabled: Boolean
+
+  """Custom Locales"""
+  customLocales: String
+  customLocalesEnabled: Boolean
   
   """Interface language"""
   language: String
@@ -322,6 +364,14 @@ type ConfigInterfaceResult {
   css: String
   cssEnabled: Boolean
 
+  """Custom Javascript"""
+  javascript: String
+  javascriptEnabled: Boolean
+
+  """Custom Locales"""
+  customLocales: String
+  customLocalesEnabled: Boolean
+  
   """Interface language"""
   language: String
 

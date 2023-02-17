@@ -23,6 +23,9 @@ func (t *GenerateScreenshotTask) Start(ctx context.Context) {
 	scenePath := t.Scene.Path
 
 	videoFile := t.Scene.Files.Primary()
+	if videoFile == nil {
+		return
+	}
 
 	var at float64
 	if t.ScreenshotAt == nil {
@@ -41,10 +44,11 @@ func (t *GenerateScreenshotTask) Start(ctx context.Context) {
 	logger.Debugf("Creating screenshot for %s", scenePath)
 
 	g := generate.Generator{
-		Encoder:     instance.FFMPEG,
-		LockManager: instance.ReadLockManager,
-		ScenePaths:  instance.Paths.Scene,
-		Overwrite:   true,
+		Encoder:      instance.FFMPEG,
+		FFMpegConfig: instance.Config,
+		LockManager:  instance.ReadLockManager,
+		ScenePaths:   instance.Paths.Scene,
+		Overwrite:    true,
 	}
 
 	if err := g.Screenshot(context.TODO(), videoFile.Path, checksum, videoFile.Width, videoFile.Duration, generate.ScreenshotOptions{
@@ -88,7 +92,7 @@ func (t *GenerateScreenshotTask) Start(ctx context.Context) {
 		}
 
 		return nil
-	}); err != nil {
+	}); err != nil && ctx.Err() == nil {
 		logger.Error(err.Error())
 	}
 }

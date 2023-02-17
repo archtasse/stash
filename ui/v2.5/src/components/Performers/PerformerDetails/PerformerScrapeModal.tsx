@@ -4,7 +4,8 @@ import { Button, Form } from "react-bootstrap";
 import { useIntl } from "react-intl";
 
 import * as GQL from "src/core/generated-graphql";
-import { Modal, LoadingIndicator } from "src/components/Shared";
+import { ModalComponent } from "src/components/Shared/Modal";
+import { LoadingIndicator } from "src/components/Shared/LoadingIndicator";
 import { useScrapePerformerList } from "src/core/StashService";
 
 const CLASSNAME = "PerformerScrapeModal";
@@ -39,7 +40,7 @@ const PerformerScrapeModal: React.FC<IProps> = ({
   useEffect(() => inputRef.current?.focus(), []);
 
   return (
-    <Modal
+    <ModalComponent
       show
       onHide={onHide}
       header={`Scrape performer from ${scraper.name}`}
@@ -70,13 +71,14 @@ const PerformerScrapeModal: React.FC<IProps> = ({
                   onClick={() => onSelectPerformer(p, scraper)}
                 >
                   {p.name}
+                  {p.disambiguation && ` (${p.disambiguation})`}
                 </Button>
               </li>
             ))}
           </ul>
         )}
       </div>
-    </Modal>
+    </ModalComponent>
   );
 };
 

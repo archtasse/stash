@@ -2,10 +2,12 @@ package ffmpeg
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"os/exec"
 	"strings"
+	"syscall"
 
 	"github.com/stashapp/stash/pkg/logger"
 )
@@ -35,8 +37,8 @@ func (s *Stream) Serve(w http.ResponseWriter, r *http.Request) {
 	// process killing should be handled by command context
 
 	_, err := io.Copy(w, s.Stdout)
-	if err != nil {
-		logger.Errorf("[stream] error serving transcoded video file: %s", err.Error())
+	if err != nil && !errors.Is(err, syscall.EPIPE) {
+		logger.Errorf("[stream] error serving transcoded video file: %v", err)
 	}
 }
 
@@ -142,11 +144,17 @@ type TranscodeStreamOptions struct {
 	// in some videos where the audio codec is not supported by ffmpeg
 	// ffmpeg fails if you try to transcode the audio
 	VideoOnly bool
+
+	// arguments added before the input argument
+	ExtraInputArgs []string
+	// arguments added before the output argument
+	ExtraOutputArgs []string
 }
 
 func (o TranscodeStreamOptions) getStreamArgs() Args {
 	var args Args
 	args = append(args, "-hide_banner")
+	args = append(args, o.ExtraInputArgs...)
 	args = args.LogLevel(LogLevelError)
 
 	if o.StartTime != 0 {
@@ -181,6 +189,8 @@ func (o TranscodeStreamOptions) getStreamArgs() Args {
 		// this is needed for 5-channel ac3 files
 		"-ac", "2",
 	)
+
+	args = append(args, o.ExtraOutputArgs...)
 
 	args = args.Format(o.Codec.format)
 	args = args.Output("pipe:")

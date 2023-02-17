@@ -15,6 +15,7 @@ import (
 	"github.com/stashapp/stash/pkg/logger"
 	"github.com/stashapp/stash/pkg/models"
 	"github.com/stashapp/stash/pkg/sliceutil/intslice"
+	"github.com/stashapp/stash/pkg/sliceutil/stringslice"
 )
 
 type table struct {
@@ -129,6 +130,15 @@ func (t *table) destroy(ctx context.Context, ids []int) error {
 	return nil
 }
 
+func (t *table) join(j joiner, as string, parentIDCol string) {
+	tableName := t.table.GetTable()
+	tt := tableName
+	if as != "" {
+		tt = as
+	}
+	j.addLeftJoin(tableName, as, fmt.Sprintf("%s.%s = %s", tt, t.idColumn.GetCol(), parentIDCol))
+}
+
 // func (t *table) get(ctx context.Context, q *goqu.SelectDataset, dest interface{}) error {
 // 	tx, err := getTx(ctx)
 // 	if err != nil {
@@ -179,21 +189,23 @@ func (t *joinTable) get(ctx context.Context, id int) ([]int, error) {
 	return ret, nil
 }
 
-func (t *joinTable) insertJoin(ctx context.Context, id, foreignID int) (sql.Result, error) {
-	q := dialect.Insert(t.table.table).Cols(t.idColumn.GetCol(), t.fkColumn.GetCol()).Vals(
-		goqu.Vals{id, foreignID},
-	)
-	ret, err := exec(ctx, q)
-	if err != nil {
-		return nil, fmt.Errorf("inserting into %s: %w", t.table.table.GetTable(), err)
-	}
-
-	return ret, nil
-}
-
 func (t *joinTable) insertJoins(ctx context.Context, id int, foreignIDs []int) error {
+	// manually create SQL so that we can prepare once
+	// ignore duplicates
+	q := fmt.Sprintf("INSERT INTO %s (%s, %s) VALUES (?, ?) ON CONFLICT (%[2]s, %s) DO NOTHING", t.table.table.GetTable(), t.idColumn.GetCol(), t.fkColumn.GetCol())
+
+	tx := dbWrapper{}
+	stmt, err := tx.Prepare(ctx, q)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	// eliminate duplicates
+	foreignIDs = intslice.IntAppendUniques(nil, foreignIDs)
+
 	for _, fk := range foreignIDs {
-		if _, err := t.insertJoin(ctx, id, fk); err != nil {
+		if _, err := tx.ExecStmt(ctx, stmt, id, fk); err != nil {
 			return err
 		}
 	}
@@ -256,18 +268,18 @@ type stashIDRow struct {
 	Endpoint null.String `db:"endpoint"`
 }
 
-func (r *stashIDRow) resolve() *models.StashID {
-	return &models.StashID{
+func (r *stashIDRow) resolve() models.StashID {
+	return models.StashID{
 		StashID:  r.StashID.String,
 		Endpoint: r.Endpoint.String,
 	}
 }
 
-func (t *stashIDTable) get(ctx context.Context, id int) ([]*models.StashID, error) {
+func (t *stashIDTable) get(ctx context.Context, id int) ([]models.StashID, error) {
 	q := dialect.Select("endpoint", "stash_id").From(t.table.table).Where(t.idColumn.Eq(id))
 
 	const single = false
-	var ret []*models.StashID
+	var ret []models.StashID
 	if err := queryFunc(ctx, q, single, func(rows *sqlx.Rows) error {
 		var v stashIDRow
 		if err := rows.StructScan(&v); err != nil {
@@ -364,6 +376,102 @@ func (t *stashIDTable) modifyJoins(ctx context.Context, id int, v []models.Stash
 	return nil
 }
 
+type stringTable struct {
+	table
+	stringColumn exp.IdentifierExpression
+}
+
+func (t *stringTable) get(ctx context.Context, id int) ([]string, error) {
+	q := dialect.Select(t.stringColumn).From(t.table.table).Where(t.idColumn.Eq(id))
+
+	const single = false
+	var ret []string
+	if err := queryFunc(ctx, q, single, func(rows *sqlx.Rows) error {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			return err
+		}
+
+		ret = append(ret, v)
+
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("getting stash ids from %s: %w", t.table.table.GetTable(), err)
+	}
+
+	return ret, nil
+}
+
+func (t *stringTable) insertJoin(ctx context.Context, id int, v string) (sql.Result, error) {
+	q := dialect.Insert(t.table.table).Cols(t.idColumn.GetCol(), t.stringColumn.GetCol()).Vals(
+		goqu.Vals{id, v},
+	)
+	ret, err := exec(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("inserting into %s: %w", t.table.table.GetTable(), err)
+	}
+
+	return ret, nil
+}
+
+func (t *stringTable) insertJoins(ctx context.Context, id int, v []string) error {
+	for _, fk := range v {
+		if _, err := t.insertJoin(ctx, id, fk); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (t *stringTable) replaceJoins(ctx context.Context, id int, v []string) error {
+	if err := t.destroy(ctx, []int{id}); err != nil {
+		return err
+	}
+
+	return t.insertJoins(ctx, id, v)
+}
+
+func (t *stringTable) addJoins(ctx context.Context, id int, v []string) error {
+	// get existing foreign keys
+	existing, err := t.get(ctx, id)
+	if err != nil {
+		return err
+	}
+
+	// only add values that are not already present
+	filtered := stringslice.StrExclude(v, existing)
+	return t.insertJoins(ctx, id, filtered)
+}
+
+func (t *stringTable) destroyJoins(ctx context.Context, id int, v []string) error {
+	for _, vv := range v {
+		q := dialect.Delete(t.table.table).Where(
+			t.idColumn.Eq(id),
+			t.stringColumn.Eq(vv),
+		)
+
+		if _, err := exec(ctx, q); err != nil {
+			return fmt.Errorf("destroying %s: %w", t.table.table.GetTable(), err)
+		}
+	}
+
+	return nil
+}
+
+func (t *stringTable) modifyJoins(ctx context.Context, id int, v []string, mode models.RelationshipUpdateMode) error {
+	switch mode {
+	case models.RelationshipUpdateModeSet:
+		return t.replaceJoins(ctx, id, v)
+	case models.RelationshipUpdateModeAdd:
+		return t.addJoins(ctx, id, v)
+	case models.RelationshipUpdateModeRemove:
+		return t.destroyJoins(ctx, id, v)
+	}
+
+	return nil
+}
+
 type scenesMoviesTable struct {
 	table
 }
@@ -442,11 +550,16 @@ func (t *scenesMoviesTable) addJoins(ctx context.Context, id int, v []models.Mov
 	// only add values that are not already present
 	var filtered []models.MoviesScenes
 	for _, vv := range v {
+		found := false
+
 		for _, e := range fks {
 			if vv.MovieID == e.MovieID {
-				continue
+				found = true
+				break
 			}
+		}
 
+		if !found {
 			filtered = append(filtered, vv)
 		}
 	}
@@ -520,6 +633,17 @@ func (t *relatedFilesTable) replaceJoins(ctx context.Context, id int, fileIDs []
 
 	const firstPrimary = true
 	return t.insertJoins(ctx, id, firstPrimary, fileIDs)
+}
+
+// destroyJoins destroys all entries in the table with the provided fileIDs
+func (t *relatedFilesTable) destroyJoins(ctx context.Context, fileIDs []file.ID) error {
+	q := dialect.Delete(t.table.table).Where(t.table.table.Col("file_id").In(fileIDs))
+
+	if _, err := exec(ctx, q); err != nil {
+		return fmt.Errorf("destroying file joins in %s: %w", t.table.table.GetTable(), err)
+	}
+
+	return nil
 }
 
 func (t *relatedFilesTable) setPrimary(ctx context.Context, id int, fileID file.ID) error {
