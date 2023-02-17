@@ -20,7 +20,6 @@ import {
 } from "src/hooks/ListHook";
 
 import { ImageCard } from "./ImageCard";
-import { ImageRater } from "./ImageRater";
 import { EditImagesDialog } from "./EditImagesDialog";
 import { ImageRater } from "./ImageRater";
 import { DeleteImagesDialog } from "./DeleteImagesDialog";
@@ -166,13 +165,6 @@ const ImageListImages: React.FC<IImageListImages> = ({
         }
       />
     );
-  }
-  function renderImageRater(
-    image: SlimImageDataFragment,
-    selectedIds: Set<string>,
-    zoomIndex: number
-  ) {
-    return <ImageRater key={image.id} image={image} zoomIndex={zoomIndex} />;
   }
 
   if (filter.displayMode === DisplayMode.Grid) {

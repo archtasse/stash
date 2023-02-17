@@ -104,9 +104,6 @@ export const ListViewOptions: React.FC<IListViewOptionsProps> = ({
         case DisplayMode.Tagger:
           displayModeId = "tagger";
           break;
-        case DisplayMode.Rater:
-          displayModeId = "rater";
-          break;
       }
       return intl.formatMessage({ id: `display_mode.${displayModeId}` });
     }
