@@ -15,6 +15,7 @@ import {
   faSquare,
   faTags,
   faThLarge,
+  faStarHalfAlt,
 } from "@fortawesome/free-solid-svg-icons";
 
 interface IListViewOptionsProps {
@@ -84,6 +85,8 @@ export const ListViewOptions: React.FC<IListViewOptionsProps> = ({
           return faSquare;
         case DisplayMode.Tagger:
           return faTags;
+        case DisplayMode.Rater:
+          return faStarHalfAlt;
       }
     }
     function getLabel(option: DisplayMode) {
@@ -138,7 +141,10 @@ export const ListViewOptions: React.FC<IListViewOptionsProps> = ({
   }
 
   function maybeRenderZoom() {
-    if (onSetZoom && displayMode === DisplayMode.Grid) {
+    if (
+      onSetZoom &&
+      (displayMode === DisplayMode.Grid || displayMode === DisplayMode.Rater)
+    ) {
       return (
         <div className="ml-2 mb-2 d-none d-sm-inline-flex">
           <Form.Control
